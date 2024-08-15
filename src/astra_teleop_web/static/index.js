@@ -2,9 +2,7 @@ function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
 }
 
-const channel = {
-  pedal: null,
-}
+const pedalCommTarget = new EventTarget();
 
 async function start() {
   document.getElementById('start').classList.add("hidden");
@@ -35,9 +33,46 @@ async function start() {
 
   const channel_pedal = pc.createDataChannel("pedal")
 
+  const toServerCb = async function (evt) {
+    channel_pedal.send(evt.detail)
+  }
+
   channel_pedal.addEventListener('open', function (evt) {
-    channel.pedal = channel_pedal
+    pedalCommTarget.addEventListener('toServer', toServerCb);
+
+    channel_pedal.addEventListener('message', function (evt) {
+      pedalCommTarget.dispatchEvent(new CustomEvent("fromServer", { detail: evt.data }))
+    })
   })
+
+  channel_pedal.addEventListener('close', function (evt) {
+    pedalCommTarget.removeEventListener('toServer', toServerCb);
+  })
+
+  // Display statistics
+  const showPing = async () => {
+    const results = await pc.getStats(null)
+    
+    results.forEach(res => {
+      if (res.type === "candidate-pair" && res.nominated) {
+        document.getElementById('pc-ping').innerHTML = res.currentRoundTripTime * 1000;
+      }
+    });
+  }
+  setInterval(showPing, 1000);
+
+  pc.addEventListener('connectionstatechange', () => {
+    document.getElementById('pc-status').innerHTML = pc.connectionState;
+    if (pc.connectionState === 'connected') {
+      document.getElementById('status').innerHTML = 'Connected.';
+    } else if (pc.connectionState === 'disconnected') {
+      document.getElementById('status').innerHTML = `Lost connection.`;
+      clearInterval(showPing)
+      document.getElementById('pc-ping').innerHTML = "INF";
+      pc.close()
+      document.getElementById('start').classList.remove("hidden");
+    }
+  });
 
   const offer = await pc.createOffer();
 
@@ -58,35 +93,30 @@ async function start() {
     }
   });
 
-  const response = await fetch('/offer', {
-    body: JSON.stringify({
-      sdp: offer.sdp,
-      type: offer.type,
-    }),
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    method: 'POST'
-  });
+  let response;
+  try {
+    response = await fetch('/offer', {
+      body: JSON.stringify({
+        sdp: offer.sdp,
+        type: offer.type,
+      }),
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      method: 'POST'
+    });
+    if (!response.ok) {
+      throw new Error(`Server response with code ${response.status}`);
+    }
+  } catch (err) {
+    document.getElementById('status').innerHTML = `Network error: ${err.message}`;
+    pc.close()
+    document.getElementById('start').classList.remove("hidden");
+  }
   const answer = await response.json();
 
   await pc.setRemoteDescription(answer);
-
-  document.getElementById('status').innerHTML = "Connected";
-  document.getElementById('stop').classList.remove("hidden");
-  document.getElementById('connect-pedal').classList.remove("hidden");
-  const step = 100
-  for (let i = 1000; i > 0; i -= step) {
-    document.getElementById('status').innerHTML = `Please select the pedal connected in next popup.   ${i / 1000.0}s`;
-    await sleep(step);
-  }
-  document.getElementById('connect-pedal').click();
 }
-
-// window.addEventListener('load', function () {
-//   // Notice: autoplay is restricted when user is not clicked the page
-//   start()
-// })
 
 async function connect_pedal() {
   const usbVendorId = 0x10c4; // Silicon Labs
@@ -100,9 +130,9 @@ async function connect_pedal() {
   const encoder = new TextEncoder();
   const writer = port.writable.getWriter();
 
-  channel.pedal.addEventListener('message', async function (evt) {
-    console.dir(evt.data)
-    await writer.write(evt.data)
+  pedalCommTarget.addEventListener('fromServer', async function (evt) {
+    console.dir(evt.detail)
+    await writer.write(evt.detail)
   })
 
   while (port.readable) {
@@ -143,7 +173,7 @@ async function connect_pedal() {
 
         const pkg = new Uint8Array(buffer)
         // console.dir(pkg)
-        channel.pedal.send(buffer)
+        pedalCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: buffer }))
       }
     } catch (error) {
       console.error("opps")
@@ -154,4 +184,34 @@ async function connect_pedal() {
     }
   }
   writer.releaseLock();
+
+  document.getElementById('connect-pedal').classList.remove("hidden");
+  document.getElementById('status').innerHTML = 'Pedel disconnected.';
 }
+
+window.addEventListener('load', function () {
+  // Notice: autoplay is restricted when user is not clicked the page
+  // start()
+
+  const left_hand_link = location.protocol + '//' + location.host + "/hand.html#left";
+
+  new QRCode("qrcode-left", {
+    text: left_hand_link,
+    width: 128,
+    height: 128,
+    correctLevel : QRCode.CorrectLevel.L
+  });
+  
+  document.getElementById('link-left').href = left_hand_link;
+
+  const right_hand_link = location.protocol + '//' + location.host + "/hand.html#right";
+  
+  new QRCode("qrcode-right", {
+    text: right_hand_link,
+    width: 128,
+    height: 128,
+    correctLevel : QRCode.CorrectLevel.L
+  });
+  
+  document.getElementById('link-right').href = left_hand_link;
+})

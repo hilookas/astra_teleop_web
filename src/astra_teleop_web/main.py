@@ -22,10 +22,10 @@ import time
 import os
 
 from typing import Set, Union
+import cv2
 
 import logging
 
-import cv2
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
@@ -165,9 +165,8 @@ class WebServer:
             ),
         )
 
-# Open camera
-def open_cam(device):
-    cam = cv2.VideoCapture(device, cv2.CAP_V4L2)
+def feed_webserver(webserver, device):
+    cam = cv2.VideoCapture(f"/dev/video_{device}", cv2.CAP_V4L2)
     cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     fourcc_value = cv2.VideoWriter_fourcc(*'MJPG')
@@ -184,11 +183,6 @@ def open_cam(device):
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, image_width)
     cam.set(cv2.CAP_PROP_FPS, frames_per_second)
     
-    return cam
-
-def feed_webserver(webserver, device):
-    cam = open_cam(f"/dev/video_{device}")
-    
     while True:
         ret, color_image = cam.read()
         color_converted = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
@@ -201,7 +195,31 @@ def feed_webserver(webserver, device):
             getattr(webserver, f"track_{device}").feed(image)
         except:
             pass
-    
+
+
+def feed_webserver_av(webserver, device):
+    container = av.open(f"/dev/video_{device}", format="v4l2", options={
+        "input_format": "mjpeg",
+        "framerate": "30",
+        "video_size": "1920x1080",
+    })
+
+    for index, frame in enumerate(container.decode(video=0)):
+        if index % 2 != 0:
+            # FFmpeg have a 256 length size of buffer for v4l2 mmap
+            # Too large for latency
+            # https://github.com/FFmpeg/FFmpeg/blob/66c05dc03163998fb9a90ebd53e2c39a4f95b7ea/libavdevice/v4l2.c#L55
+            continue
+        image = frame.to_image()
+        if device == "head":
+            image = image.resize((1280, 720))
+        else:
+            image = image.resize((640, 360))
+        try:
+            getattr(webserver, f"track_{device}").feed(image)
+        except:
+            pass
+
 
 def main():
     webserver = WebServer()
