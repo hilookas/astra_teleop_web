@@ -18,7 +18,7 @@ async function start() {
   pc.addEventListener('track', function (evt) {
     if (evt.track.kind === 'video') {
       if (evt.transceiver.mid === '0') {
-        document.getElementById('video_low').srcObject = new MediaStream([evt.track]);
+        document.getElementById('video_head').srcObject = new MediaStream([evt.track]);
       } else if (evt.transceiver.mid === '1') {
         document.getElementById('video_wrist_left').srcObject = new MediaStream([evt.track]);
       } else if (evt.transceiver.mid === '2') {

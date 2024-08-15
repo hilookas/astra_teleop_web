@@ -24,7 +24,10 @@ import os
 from typing import Set, Union
 
 import logging
+
+import cv2
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
     kind = 'video'
@@ -58,7 +61,7 @@ class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
         except queue.Full:
             try:
                 self.q.get_nowait()
-                logger.warning('lost one message')
+                logger.debug('lost one image')
             except queue.Empty:
                 logger.debug('times fly!')
                 pass
@@ -71,18 +74,22 @@ def asyncio_run_thread_in_new_loop(coroutine):
 
 class WebServer:
     def __init__(self):
+        self.track_head = None
+        self.track_wrist_left = None
+        self.track_wrist_right = None
+
         self.t = threading.Thread(target=asyncio_run_thread_in_new_loop, args=(self.run_server(), ), daemon=True)
         self.t.start()
 
     async def run_server(self):
         self.app = aiohttp.web.Application()
 
-        self.pcs: Set[aiortc.RTCPeerConnection] = set()
+        self.pc: aiortc.RTCPeerConnection | None = None
 
         async def on_shutdown(app):
-            # close peer connections
-            await asyncio.gather(*[pc.close() for pc in self.pcs])
-            self.pcs.clear()
+            if self.pc:
+                await self.pc.close()
+                self.pc = None
         self.app.on_shutdown.append(on_shutdown)
 
         self.app.router.add_post("/offer", self.offer)
@@ -94,7 +101,7 @@ class WebServer:
         # See: https://github.com/aiortc/aiortc/issues/1116
 
         if not Path("cert.pem").exists():
-            print("generating certs")
+            logger.info("generating certs")
             subprocess.check_call(
                 "openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 3650 -nodes -subj '/CN=astra-teleop-web'",
                 shell=True
@@ -108,22 +115,26 @@ class WebServer:
         site = aiohttp.web.TCPSite(runner, '0.0.0.0', 9443, ssl_context=ssl_context)
         await site.start()
         
-        print("start teleop at https://localhost:9443/index.html")
+        logger.info("start teleop at https://localhost:9443/index.html")
 
     async def offer(self, request):
         params = await request.json()
 
         offer = aiortc.RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+        
+        if self.pc is not None:
+            raise Exception("Multiple connection!")
 
-        pc = aiortc.RTCPeerConnection()
-        self.pcs.add(pc)
+        self.pc = pc = aiortc.RTCPeerConnection()
 
         @pc.on("connectionstatechange")
         async def on_connectionstatechange():
-            print("Connection state is %s" % pc.connectionState)
+            logger.info("Connection state is %s" % pc.connectionState)
             if pc.connectionState == "failed":
                 await pc.close()
-                self.pcs.discard(pc)
+                self.pc = None
+            elif pc.connectionState == "closed":
+                self.pc = None
                 
         @pc.on("datachannel")
         def on_datachannel(channel):
@@ -131,12 +142,16 @@ class WebServer:
             if channel.label == "pedal":
                 @channel.on("message")
                 async def on_message(msg):
-                    print(msg)
+                    logger.info(msg)
             else:
                 raise Exception("Unknown label")
 
-        track = FeedableVideoStreamTrack()
-        pc.addTransceiver(track, "sendonly")
+        self.track_head = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track_head, "sendonly") # mid: 0
+        self.track_wrist_left = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track_wrist_left, "sendonly") # mid: 1
+        self.track_wrist_right = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track_wrist_right, "sendonly") # mid: 2
 
         await pc.setRemoteDescription(offer)
 
@@ -150,11 +165,53 @@ class WebServer:
             ),
         )
 
+# Open camera
+def open_cam(device):
+    cam = cv2.VideoCapture(device, cv2.CAP_V4L2)
+    cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    fourcc_value = cv2.VideoWriter_fourcc(*'MJPG')
+
+    image_height = 1080
+    image_width = 1920
+
+    image_size = (image_height, image_width)
+
+    frames_per_second = 30
+
+    cam.set(cv2.CAP_PROP_FOURCC, fourcc_value)
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, image_height)
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, image_width)
+    cam.set(cv2.CAP_PROP_FPS, frames_per_second)
+    
+    return cam
+
+def feed_webserver(webserver, device):
+    cam = open_cam(f"/dev/video_{device}")
+    
+    while True:
+        ret, color_image = cam.read()
+        color_converted = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+        image = PIL.Image.fromarray(color_converted)
+        if device == "head":
+            image = image.resize((1280, 720))
+        else:
+            image = image.resize((640, 360))
+        try:
+            getattr(webserver, f"track_{device}").feed(image)
+        except:
+            pass
+    
+
 def main():
     webserver = WebServer()
     
+    threading.Thread(target=feed_webserver, args=(webserver, "head"), daemon=True).start()
+    threading.Thread(target=feed_webserver, args=(webserver, "wrist_left"), daemon=True).start()
+    threading.Thread(target=feed_webserver, args=(webserver, "wrist_right"), daemon=True).start()
+    
     while True:
-        time.sleep(1)
+        time.sleep(0.1)
 
 if __name__ == '__main__':
     main()
