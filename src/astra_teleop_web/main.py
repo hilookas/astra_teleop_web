@@ -13,17 +13,12 @@ import av.video
 import PIL.Image
 import fractions
 import ssl
-
 import threading
 import queue
-
 import time
-
 import os
-
-from typing import Set, Union
+from typing import Union
 import cv2
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -84,15 +79,16 @@ class WebServer:
     async def run_server(self):
         self.app = aiohttp.web.Application()
 
-        self.pc: aiortc.RTCPeerConnection | None = None
+        self.pc: dict[str, aiortc.RTCPeerConnection] = {}
 
         async def on_shutdown(app):
-            if self.pc:
-                await self.pc.close()
-                self.pc = None
+            # close peer connections
+            await asyncio.gather(*[pc.close() for pc in self.pc])
+            self.pc.clear()
         self.app.on_shutdown.append(on_shutdown)
 
         self.app.router.add_post("/offer", self.offer)
+        self.app.router.add_post("/offer-hand-{hand_type}", self.offer_hand)
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.app.router.add_static('/', os.path.join(script_dir, 'static'), show_index=True)
@@ -122,19 +118,19 @@ class WebServer:
 
         offer = aiortc.RTCSessionDescription(sdp=params["sdp"], type=params["type"])
         
-        if self.pc is not None:
-            raise Exception("Multiple connection!")
+        if 'head' in self.pc:
+            raise aiohttp.web.HTTPBadRequest(reason="Multiple connection! Wait for last connection is done")
 
-        self.pc = pc = aiortc.RTCPeerConnection()
+        self.pc['head'] = pc = aiortc.RTCPeerConnection()
 
         @pc.on("connectionstatechange")
         async def on_connectionstatechange():
             logger.info("Connection state is %s" % pc.connectionState)
             if pc.connectionState == "failed":
                 await pc.close()
-                self.pc = None
+                del self.pc['head']
             elif pc.connectionState == "closed":
-                self.pc = None
+                del self.pc['head']
                 
         @pc.on("datachannel")
         def on_datachannel(channel):
@@ -142,7 +138,60 @@ class WebServer:
             if channel.label == "pedal":
                 @channel.on("message")
                 async def on_message(msg):
-                    logger.info(msg)
+                    print(msg)
+            else:
+                raise Exception("Unknown label")
+
+        self.track_head = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track_head, "sendonly") # mid: 0
+        self.track_wrist_left = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track_wrist_left, "sendonly") # mid: 1
+        self.track_wrist_right = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track_wrist_right, "sendonly") # mid: 2
+
+        await pc.setRemoteDescription(offer)
+
+        answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+
+        return aiohttp.web.Response(
+            content_type="application/json",
+            text=json.dumps(
+                {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+            ),
+        )
+
+    async def offer_hand(self, request):
+        params = await request.json()
+        hand_type = request.match_info["hand_type"]
+        if hand_type not in [ 'left', 'right' ]:
+            raise aiohttp.web.HTTPBadRequest(reason="Hand type must be 'left' or 'right'")
+    
+        params = await request.json()
+
+        offer = aiortc.RTCSessionDescription(sdp=params["sdp"], type=params["type"])
+        
+        if 'hand_' + hand_type in self.pc:
+            raise aiohttp.web.HTTPBadRequest(reason="Multiple connection! Wait for last connection is done")
+
+        self.pc['hand_' + hand_type] = pc = aiortc.RTCPeerConnection()
+
+        @pc.on("connectionstatechange")
+        async def on_connectionstatechange():
+            logger.info("Connection state is %s" % pc.connectionState)
+            if pc.connectionState == "failed":
+                await pc.close()
+                del self.pc['hand_' + hand_type]
+            elif pc.connectionState == "closed":
+                del self.pc['hand_' + hand_type]
+                
+        @pc.on("datachannel")
+        def on_datachannel(channel):
+            logger.info("channel(%s) - %s" % (channel.label, repr("created by remote party")))
+            if channel.label == "hand":
+                @channel.on("message")
+                async def on_message(msg):
+                    print(msg)
             else:
                 raise Exception("Unknown label")
 

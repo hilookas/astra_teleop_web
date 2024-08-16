@@ -106,7 +106,7 @@ async function start() {
       method: 'POST'
     });
     if (!response.ok) {
-      throw new Error(`Server response with code ${response.status}`);
+      throw new Error(`Server response with code ${response.status} message '${await response.text()}'`);
     }
   } catch (err) {
     document.getElementById('status').innerHTML = `Network error: ${err.message}`;
