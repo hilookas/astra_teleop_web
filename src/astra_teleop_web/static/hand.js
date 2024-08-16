@@ -33,27 +33,47 @@ async function capture() {
   await new Promise((resolve) => {
     $video.addEventListener('loadedmetadata', resolve)
   });
-
-  const { videoWidth, videoHeight } = $video;
+  
+  const width = Math.max($video.videoWidth, $video.videoHeight);
+  const height = Math.min($video.videoWidth, $video.videoHeight);
 
   const $inCanvas = document.createElement('canvas');
-  const inCtx = $inCanvas.getContext('2d');
-  $inCanvas.width = videoWidth;
-  $inCanvas.height = videoHeight;
+  const inCtx = $inCanvas.getContext('2d', { willReadFrequently: true });
+  $inCanvas.width = width;
+  $inCanvas.height = height;
+
+  let $inRotateCanvas = null;
+  let inRotateCtx = null;
+  let inRotateFrame = null;
+
+  function imread(mat) {
+    if ($video.videoWidth > $video.videoHeight) {
+      inCtx.drawImage($video, 0, 0, $video.videoWidth, $video.videoHeight);
+      mat.data.set(inCtx.getImageData(0, 0, $video.videoWidth, $video.videoHeight).data)
+    } else {
+      if (!$inRotateCanvas) { // handle rotation issue
+        $inRotateCanvas = document.createElement('canvas');
+        inRotateCtx = $inRotateCanvas.getContext('2d', { willReadFrequently: true });
+        $inRotateCanvas.width = $video.videoWidth;
+        $inRotateCanvas.height = $video.videoHeight;
+        
+        inRotateFrame = new cv.Mat($video.videoHeight, $video.videoWidth, cv.CV_8UC4);
+      }
+      inRotateCtx.drawImage($video, 0, 0, $video.videoWidth, $video.videoHeight);
+      inRotateFrame.data.set(inRotateCtx.getImageData(0, 0, $video.videoWidth, $video.videoHeight).data)
+      cv.rotate(inRotateFrame, mat, cv.ROTATE_90_CLOCKWISE)
+    }
+  }
 
   const $outCanvas = document.getElementById('canvas-imshow');
   const outCtx = $outCanvas.getContext("2d");
-  $outCanvas.width = videoWidth;
-  $outCanvas.height = videoHeight;
-
-  function imread(mat) {
-    inCtx.drawImage($video, 0, 0, videoWidth, videoHeight);
-    mat.data.set(inCtx.getImageData(0, 0, videoWidth, videoHeight).data)
-  }
+  $outCanvas.width = 960;
+  $outCanvas.height = 540;
   
   const outFrame = new cv.Mat;
 
   function imshow(mat) {
+    cv.resize(mat, mat, new cv.Size(960, 540), 0, 0, cv.INTER_LINEAR) // lower resolution for faster output
     const depth = mat.type() % 8;
     const scale = depth <= cv.CV_8S ? 1 : depth <= cv.CV_32S ? 1 / 256 : 255;
     const shift = depth === cv.CV_8S || depth === cv.CV_16S ? 128 : 0;
@@ -74,12 +94,14 @@ async function capture() {
     outCtx.putImageData(imgData, 0, 0);
   }
 
-  const srcFrame = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
-  const dstFrame = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC1);
+  const frame = new cv.Mat(height, width, cv.CV_8UC4);
+  const dstFrame = new cv.Mat(height, width, cv.CV_8UC1);
 
   while (true) {
-    imread(srcFrame)
-    cv.cvtColor(srcFrame, dstFrame, cv.COLOR_RGBA2GRAY);
+    imread(frame)
+    // cv.cvtColor(frame, dstFrame, cv.COLOR_RGBA2GRAY);
+
+    frame.copyTo(dstFrame)
 
     imshow(dstFrame)
     await sleep(1);
