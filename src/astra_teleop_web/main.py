@@ -195,13 +195,6 @@ class WebServer:
             else:
                 raise Exception("Unknown label")
 
-        self.track_head = FeedableVideoStreamTrack()
-        pc.addTransceiver(self.track_head, "sendonly") # mid: 0
-        self.track_wrist_left = FeedableVideoStreamTrack()
-        pc.addTransceiver(self.track_wrist_left, "sendonly") # mid: 1
-        self.track_wrist_right = FeedableVideoStreamTrack()
-        pc.addTransceiver(self.track_wrist_right, "sendonly") # mid: 2
-
         await pc.setRemoteDescription(offer)
 
         answer = await pc.createAnswer()

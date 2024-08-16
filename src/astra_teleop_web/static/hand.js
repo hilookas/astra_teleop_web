@@ -11,8 +11,8 @@ async function capture() {
           exact: "user", // or environment
         },
         frameRate: { min: 30, ideal: 60, max: 60 },
-        width: { min: 1080, ideal: 1920, max: 1920 },
-        height: { min: 720, ideal: 1080, max: 1080 }
+        width: { min: 640, ideal: 1920, max: 1920 },
+        height: { min: 480, ideal: 1080, max: 1080 }
       },
     });
   } catch (err) {
@@ -25,7 +25,65 @@ async function capture() {
   trackSetting = track.getSettings()
   document.getElementById('status').innerHTML = `Using video device: ${track.label} ${trackSetting.width}x${trackSetting.height}@${trackSetting.frameRate}`;
 
-  document.getElementById('video_hand').srcObject = stream;
+  const $video = document.getElementById('video-hand')
+  $video.srcObject = stream;
+  $video.play() // different from autoplay! When autoplay is set, video will be paused when the video is out of view
+
+  // wait for video element play
+  await new Promise((resolve) => {
+    $video.addEventListener('loadedmetadata', resolve)
+  });
+
+  const { videoWidth, videoHeight } = $video;
+
+  const $inCanvas = document.createElement('canvas');
+  const inCtx = $inCanvas.getContext('2d');
+  $inCanvas.width = videoWidth;
+  $inCanvas.height = videoHeight;
+
+  const $outCanvas = document.getElementById('canvas-imshow');
+  const outCtx = $outCanvas.getContext("2d");
+  $outCanvas.width = videoWidth;
+  $outCanvas.height = videoHeight;
+
+  function imread(mat) {
+    inCtx.drawImage($video, 0, 0, videoWidth, videoHeight);
+    mat.data.set(inCtx.getImageData(0, 0, videoWidth, videoHeight).data)
+  }
+  
+  const outFrame = new cv.Mat;
+
+  function imshow(mat) {
+    const depth = mat.type() % 8;
+    const scale = depth <= cv.CV_8S ? 1 : depth <= cv.CV_32S ? 1 / 256 : 255;
+    const shift = depth === cv.CV_8S || depth === cv.CV_16S ? 128 : 0;
+    mat.convertTo(outFrame, cv.CV_8U, scale, shift);
+    switch (outFrame.type()) {
+    case cv.CV_8UC1:
+      cv.cvtColor(outFrame, outFrame, cv.COLOR_GRAY2RGBA);
+      break;
+    case cv.CV_8UC3:
+      cv.cvtColor(outFrame, outFrame, cv.COLOR_RGB2RGBA);
+      break;
+    case cv.CV_8UC4:
+      break;
+    default:
+      throw new Error("Bad number of channels (Source image must have 1, 3 or 4 channels)");
+    }
+    const imgData = new ImageData(new Uint8ClampedArray(outFrame.data), outFrame.cols, outFrame.rows);
+    outCtx.putImageData(imgData, 0, 0);
+  }
+
+  const srcFrame = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC4);
+  const dstFrame = new cv.Mat(videoHeight, videoWidth, cv.CV_8UC1);
+
+  while (true) {
+    imread(srcFrame)
+    cv.cvtColor(srcFrame, dstFrame, cv.COLOR_RGBA2GRAY);
+
+    imshow(dstFrame)
+    await sleep(1);
+  }
 }
 
 const handCommTarget = new EventTarget();
@@ -38,40 +96,21 @@ async function start() {
     sdpSemantics: 'unified-plan'
   });
 
-  // connect audio / video
-  pc.addEventListener('track', function (evt) {
-    if (evt.track.kind === 'video') {
-      if (evt.transceiver.mid === '0') {
-        document.getElementById('video_head').srcObject = new MediaStream([evt.track]);
-      } else if (evt.transceiver.mid === '1') {
-        document.getElementById('video_wrist_left').srcObject = new MediaStream([evt.track]);
-      } else if (evt.transceiver.mid === '2') {
-        document.getElementById('video_wrist_right').srcObject = new MediaStream([evt.track]);
-      } else {
-        console.error("Unsupported mid")
-      }
-    }
-  });
-
-  pc.addTransceiver('video', { direction: 'recvonly' });
-  pc.addTransceiver('video', { direction: 'recvonly' });
-  pc.addTransceiver('video', { direction: 'recvonly' });
-
-  const channel_hand = pc.createDataChannel("hand")
+  const handChannel = pc.createDataChannel("hand")
 
   const toServerCb = async function (evt) {
-    channel_hand.send(evt.detail)
+    handChannel.send(evt.detail)
   }
 
-  channel_hand.addEventListener('open', function (evt) {
+  handChannel.addEventListener('open', function (evt) {
     handCommTarget.addEventListener('toServer', toServerCb);
 
-    channel_hand.addEventListener('message', function (evt) {
+    handChannel.addEventListener('message', function (evt) {
       handCommTarget.dispatchEvent(new CustomEvent("fromServer", { detail: evt.data }))
     })
   })
 
-  channel_hand.addEventListener('close', function (evt) {
+  handChannel.addEventListener('close', function (evt) {
     handCommTarget.removeEventListener('toServer', toServerCb);
   })
 
@@ -121,7 +160,7 @@ async function start() {
 
   let response;
   try {
-    response = await fetch('/offer-hand-' + hand_type, {
+    response = await fetch('/offer-hand-' + handType, {
       body: JSON.stringify({
         sdp: offer.sdp,
         type: offer.type,
@@ -144,21 +183,23 @@ async function start() {
   await pc.setRemoteDescription(answer);
 }
 
-let hand_type = null;
+let handType = null;
 
 window.addEventListener('load', function () {
   // Notice: autoplay is restricted when user is not clicked the page
   // start()
 
-  hand_type = window.location.hash.substring(1);
-  if (hand_type === "left") {
+  handType = window.location.hash.substring(1);
+  if (handType === "left") {
     document.getElementById('which-hand').innerHTML = 'Left ';
-  } else if (hand_type === "right") {
+  } else if (handType === "right") {
     document.getElementById('which-hand').innerHTML = 'Right ';
   } else {
     document.getElementById('status').innerHTML = "Hand type must be 'left' or 'right'";
     document.getElementById('start').classList.add("hidden");
-    hand_type = null;
+    handType = null;
     return;
   }
+
+  document.getElementById('status').innerHTML = `Click the start stream button.`;
 })

@@ -12,7 +12,7 @@
     <div class="mx-auto p-6 bg-white border-y sm:border-x border-gray-200 sm:rounded-lg shadow">
         <h5 class="mb-2 text-2xl font-bold tracking-tight text-gray-900">Astra Teleop (<span id="which-hand"></span>Hand)</h5>
         <p id="status" class="mb-3 font-normal text-gray-700">
-            Click the start stream button.
+            Loading...
         </p>
         <p class="mb-3 font-normal text-gray-700">
            Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms
@@ -27,8 +27,9 @@
             </button>
         </div>
         <div>
-            <audio id="audio" autoplay="true"></audio>
-            <video id="video_hand" autoplay="true" playsinline="true" muted="true" class="inline-block"></video><br />
+            <audio id="audio"></audio>
+            <video id="video-hand" playsinline="true" muted="true" class="inline-block"></video><br />
+            <canvas id="canvas-imshow"></canvas><br />
         </div>
         <p class="mt-3 font-normal text-gray-700">
            Video capture from your device will NOT be uploaded to server, and will be processed on local with OpenCV.js

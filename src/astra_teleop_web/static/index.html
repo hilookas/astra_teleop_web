@@ -22,15 +22,15 @@
                 Start Stream
             </button>
             
-            <button id="connect-pedal" onclick="connect_pedal()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+            <button id="connect-pedal" onclick="connectPedal()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed">
                 Connect Pedal
             </button>
         </div>
         <div>
-            <audio id="audio" autoplay="true"></audio>
-            <video id="video_head" autoplay="true" playsinline="true" muted="true" class="inline-block"></video><br />
-            <video id="video_wrist_left" autoplay="true" playsinline="true" muted="true" class="inline-block"></video><!-- remove space
-            --><video id="video_wrist_right" autoplay="true" playsinline="true" muted="true" class="inline-block"></video>
+            <audio id="audio"></audio>
+            <video id="video-head" playsinline="true" muted="true" class="inline-block"></video><br />
+            <video id="video-wrist-left" playsinline="true" muted="true" class="inline-block"></video><!-- remove space
+            --><video id="video-wrist-right" playsinline="true" muted="true" class="inline-block"></video>
         </div>
     </div>
     <div class="mx-auto p-6 bg-white border-y sm:border-x border-gray-200 sm:rounded-lg shadow mt-4">

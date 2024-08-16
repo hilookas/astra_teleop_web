@@ -16,11 +16,14 @@ async function start() {
   pc.addEventListener('track', function (evt) {
     if (evt.track.kind === 'video') {
       if (evt.transceiver.mid === '0') {
-        document.getElementById('video_head').srcObject = new MediaStream([evt.track]);
+        document.getElementById('video-head').srcObject = new MediaStream([evt.track]);
+        document.getElementById('video-head').play();
       } else if (evt.transceiver.mid === '1') {
-        document.getElementById('video_wrist_left').srcObject = new MediaStream([evt.track]);
+        document.getElementById('video-wrist-left').srcObject = new MediaStream([evt.track]);
+        document.getElementById('video-wrist-left').play();
       } else if (evt.transceiver.mid === '2') {
-        document.getElementById('video_wrist_right').srcObject = new MediaStream([evt.track]);
+        document.getElementById('video-wrist-right').srcObject = new MediaStream([evt.track]);
+        document.getElementById('video-wrist-right').play();
       } else {
         console.error("Unsupported mid")
       }
@@ -31,21 +34,21 @@ async function start() {
   pc.addTransceiver('video', { direction: 'recvonly' });
   pc.addTransceiver('video', { direction: 'recvonly' });
 
-  const channel_pedal = pc.createDataChannel("pedal")
+  const pedalChannel = pc.createDataChannel("pedal")
 
   const toServerCb = async function (evt) {
-    channel_pedal.send(evt.detail)
+    pedalChannel.send(evt.detail)
   }
 
-  channel_pedal.addEventListener('open', function (evt) {
+  pedalChannel.addEventListener('open', function (evt) {
     pedalCommTarget.addEventListener('toServer', toServerCb);
 
-    channel_pedal.addEventListener('message', function (evt) {
+    pedalChannel.addEventListener('message', function (evt) {
       pedalCommTarget.dispatchEvent(new CustomEvent("fromServer", { detail: evt.data }))
     })
   })
 
-  channel_pedal.addEventListener('close', function (evt) {
+  pedalChannel.addEventListener('close', function (evt) {
     pedalCommTarget.removeEventListener('toServer', toServerCb);
   })
 
@@ -118,7 +121,7 @@ async function start() {
   await pc.setRemoteDescription(answer);
 }
 
-async function connect_pedal() {
+async function connectPedal() {
   const usbVendorId = 0x10c4; // Silicon Labs
   const port = await navigator.serial.requestPort({ filters: [{ usbVendorId }] })
   await port.open({ baudRate: 921600 });
@@ -193,25 +196,25 @@ window.addEventListener('load', function () {
   // Notice: autoplay is restricted when user is not clicked the page
   // start()
 
-  const left_hand_link = location.protocol + '//' + location.host + "/hand.html#left";
+  const leftHandURL = location.protocol + '//' + location.host + "/hand.html#left";
 
   new QRCode("qrcode-left", {
-    text: left_hand_link,
+    text: leftHandURL,
     width: 128,
     height: 128,
     correctLevel : QRCode.CorrectLevel.L
   });
   
-  document.getElementById('link-left').href = left_hand_link;
+  document.getElementById('link-left').href = leftHandURL;
 
-  const right_hand_link = location.protocol + '//' + location.host + "/hand.html#right";
+  const rightHandURL = location.protocol + '//' + location.host + "/hand.html#right";
   
   new QRCode("qrcode-right", {
-    text: right_hand_link,
+    text: rightHandURL,
     width: 128,
     height: 128,
     correctLevel : QRCode.CorrectLevel.L
   });
   
-  document.getElementById('link-right').href = left_hand_link;
+  document.getElementById('link-right').href = leftHandURL;
 })
