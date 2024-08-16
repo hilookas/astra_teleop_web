@@ -18,12 +18,16 @@
            Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms
         </p>
         <div class="mb-3">
-            <button id="capture" onclick="capture()" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 border border-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed">
-                Start Capture
-            </button>
-
             <button id="start" onclick="start()" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 border border-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed">
                 Start Stream
+            </button>
+
+            <button id="capture" onclick="capture()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                Start Capture
+            </button>
+            
+            <button id="calibrate" onclick="calibrate()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                Calibrate Camera
             </button>
         </div>
         <div>

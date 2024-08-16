@@ -2,7 +2,20 @@ function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
 }
 
-async function capture() {
+function waitFrame($video) {
+  return new Promise((resolve) => {
+    function tick() {
+      if ($video.readyState === $video.HAVE_ENOUGH_DATA) {
+        resolve();
+      } else {
+        requestAnimationFrame(tick);
+      }
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+async function getMedia() {
   let stream;
   try {
      stream = await navigator.mediaDevices.getUserMedia({
@@ -17,18 +30,24 @@ async function capture() {
     });
   } catch (err) {
     document.getElementById('status').innerHTML = `Error opening video capture (may be your cam have too low resolution): ${err.name} ${err.message}`;
-    throw err
+    throw err;
   }
+  
   document.getElementById('capture').classList.add("hidden");
+  document.getElementById('calibrate').classList.add("hidden");
   
   const track = stream.getVideoTracks()[0];
-  trackSetting = track.getSettings()
+  trackSetting = track.getSettings();
   document.getElementById('status').innerHTML = `Using video device: ${track.label} ${trackSetting.width}x${trackSetting.height}@${trackSetting.frameRate}`;
 
-  const $video = document.getElementById('video-hand')
+  const $video = document.getElementById('video-hand');
   $video.srcObject = stream;
-  $video.play() // different from autoplay! When autoplay is set, video will be paused when the video is out of view
+  $video.play(); // different from autoplay! When autoplay is set, video will be paused when the video is out of view
 
+  return $video;
+}
+
+async function initOpenCV($video) {
   // wait for video element play
   await new Promise((resolve) => {
     $video.addEventListener('loadedmetadata', resolve)
@@ -37,7 +56,7 @@ async function capture() {
   const width = Math.max($video.videoWidth, $video.videoHeight);
   const height = Math.min($video.videoWidth, $video.videoHeight);
 
-  const cv2 = await cv;
+  window.cv2 = await cv;
 
   const $inCanvas = document.createElement('canvas');
   const inCtx = $inCanvas.getContext('2d', { willReadFrequently: true });
@@ -96,6 +115,13 @@ async function capture() {
     outCtx.putImageData(imgData, 0, 0);
   }
 
+  return { width, height, imread, imshow }
+}
+
+async function capture() {
+  const $video = await getMedia();
+  const { width, height, imread, imshow } = await initOpenCV($video);
+
   const frame = new cv2.Mat(height, width, cv2.CV_8UC4);
   const dstFrame = new cv2.Mat();
 
@@ -103,31 +129,183 @@ async function capture() {
   const aruco_detection_parameters = new cv2.aruco_DetectorParameters()
   // aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG
   const detector = new cv2.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, new cv2.aruco_RefineParameters(10, 3, true))
-  
-  const corners = new cv2.MatVector();
-  const ids = new cv2.Mat();
-  const rejected = new cv2.MatVector();
 
-  function tick(){
-    if ($video.readyState === $video.HAVE_ENOUGH_DATA){
-      imread(frame)
-  
-      const start = performance.now();
-      detector.detectMarkers(frame, corners, ids, rejected)
-      const end = performance.now();
-      document.getElementById('aruco-timing').innerHTML = Math.round(end - start);
-      
-      // frame.copyTo(dstFrame)
-  
-      cv2.cvtColor(frame, dstFrame, cv2.COLOR_RGBA2RGB);
-      cv2.drawDetectedMarkers(dstFrame, corners, ids)
-  
-      imshow(dstFrame)
+  while (true) {
+    await waitFrame($video);
+    imread(frame)
+    
+    const corners = new cv2.MatVector();
+    const ids = new cv2.Mat();
+    const rejected = new cv2.MatVector();
+
+    const start = performance.now();
+    detector.detectMarkers(frame, corners, ids, rejected)
+    const end = performance.now();
+    document.getElementById('aruco-timing').innerHTML = Math.round(end - start);
+
+    for (let i = 0; i < corners.size(); ++i) {
+      console.log(corners.get(i).cols)
+      console.log(corners.get(i).rows)
+      console.dir(corners.get(i).data32F) // type(): cv2.CV_32FC2
     }
-    requestAnimationFrame(tick);
+    console.dir(ids.type().data32S) // type(): cv2.CV_32SC1
+    
+    // frame.copyTo(dstFrame)
+
+    cv2.cvtColor(frame, dstFrame, cv2.COLOR_RGBA2RGB);
+    cv2.drawDetectedMarkers(dstFrame, corners, ids)
+
+    imshow(dstFrame)
+
+    corners.delete()
+    ids.delete()
+    rejected.delete()
+  }
+}
+
+async function calibrate() {
+  const $video = await getMedia();
+  const { width, height, imread, imshow } = await initOpenCV($video);
+
+  const frame = new cv2.Mat(height, width, cv2.CV_8UC4);
+  const dstFrame = new cv2.Mat();
+
+  // Aruco Board
+  const aruco_dict = cv2.getPredefinedDictionary(cv2.DICT_5X5_1000);
+  const aruco_board = new cv2.aruco_CharucoBoard(new cv2.Size(5, 7), 0.04, 0.02, aruco_dict, new cv2.Mat());
+
+  const charuco_parameters = new cv2.aruco_CharucoParameters();
+  const detector_parameters = new cv2.aruco_DetectorParameters();
+  const refine_parameters = new cv2.aruco_RefineParameters(10, 3, true);
+  const charuco_detector = new cv2.aruco_CharucoDetector(aruco_board, charuco_parameters, detector_parameters, refine_parameters);
+
+  let number_of_points = 0;
+  const all_object_points = new cv2.MatVector();
+  const all_image_points = new cv2.MatVector();
+  
+  let cnt = 0;
+  let last_cnt = performance.now();
+  
+  const max_cnt = 40;
+  const min_cnt_interval = 500;
+  
+  while (cnt < max_cnt) {
+    await waitFrame($video);
+
+    imread(frame);
+    cv2.cvtColor(frame, dstFrame, cv2.COLOR_RGBA2RGB);
+    
+    const charuco_corners = new cv2.Mat();
+    const charuco_ids = new cv2.Mat();
+    const marker_corners = new cv2.MatVector();
+    const marker_ids = new cv2.Mat();
+  
+    const start = performance.now();
+    charuco_detector.detectBoard(dstFrame, charuco_corners, charuco_ids, marker_corners, marker_ids);
+    const end = performance.now();
+    document.getElementById('aruco-timing').innerHTML = Math.round(end - start);
+  
+    // console.log('len(charuco_ids) =', charuco_ids.rows);
+    
+    if (charuco_ids.rows > 0) {
+      // console.dir(charuco_corners.data32F) // type(): cv2.CV_32FC2
+      // console.dir(charuco_ids.data32S) // type(): cv2.CV_32SC1
+  
+      // matchImagePoints require complicated type convert
+      const detected_corners = new cv2.MatVector();
+      for (let i = 0; i < charuco_corners.rows; ++i) {
+        mat = new cv2.Mat(1, 1, cv2.CV_32FC2);
+        mat.data.set(charuco_corners.data.subarray(i * 8, i * 8 + 8));
+        detected_corners.push_back(mat);
+      }
+  
+      const object_points = new cv2.Mat();
+      const image_points = new cv2.Mat();
+      aruco_board.matchImagePoints(detected_corners, charuco_ids, object_points, image_points);
+      
+      // console.log('len(object_points) =', object_points.rows);
+  
+      if (object_points.rows >= 8 && performance.now() - last_cnt > min_cnt_interval) {
+        last_cnt = performance.now();
+        ++cnt;
+        number_of_points += object_points.rows;
+        all_object_points.push_back(object_points);
+        all_image_points.push_back(image_points);
+        document.getElementById('status').innerHTML = `Collecting image (${cnt}/${max_cnt})`;
+      }
+  
+      cv2.drawDetectedCornersCharuco(dstFrame, charuco_corners, charuco_ids);
+      detected_corners.delete();
+  
+      object_points.delete();
+      image_points.delete();
+    }
+    // aruco_board.generateImage(new cv2.Size(1280, 720), dstFrame, 0, 1);
+    imshow(dstFrame);
+  
+    charuco_corners.delete();
+    charuco_ids.delete();
+    marker_corners.delete();
+    marker_ids.delete();
   }
   
-  requestAnimationFrame(tick);
+  // console.dir(number_of_points)
+  
+  document.getElementById('status').innerHTML = `Collection done. It may take about 3 minutes to do calibration. number_of_points: ${number_of_points}`;
+  
+  await sleep(100);
+  
+  const camera_matrix = new cv2.Mat();
+  const distortion_coefficients = new cv2.Mat();
+  const rotation_vectors = new cv2.MatVector();
+  const translation_vectors = new cv2.MatVector();
+
+  const projection_error = cv2.calibrateCameraExtended(
+    all_object_points,
+    all_image_points,
+    new cv2.Size(width, height),
+    camera_matrix, 
+    distortion_coefficients, 
+    rotation_vectors, 
+    translation_vectors,
+    new cv2.Mat(),
+    new cv2.Mat(),
+    new cv2.Mat()
+  );
+
+  // console.dir(camera_matrix.rows); // type(): cv2.CV_64FC1
+  // console.dir(camera_matrix.cols); // type(): cv2.CV_64FC1
+  // console.dir(camera_matrix.data64F); // type(): cv2.CV_64FC1
+  // console.dir(distortion_coefficients.rows); // type(): cv2.CV_64FC1
+  // console.dir(distortion_coefficients.cols); // type(): cv2.CV_64FC1
+  // console.dir(distortion_coefficients.data64F); // type(): cv2.CV_64FC1
+  // console.dir(projection_error);
+
+  const camera_matrix_list = [];
+  for (let i = 0; i < 3; ++i) {
+    const row = [];
+    for (let j = 0; j < 3; ++j) {
+      row.push(camera_matrix.data64F[i * 3 + j]);
+    }
+    camera_matrix_list.push(row);
+  }
+  
+  const distortion_coefficients_list = [];
+  for (let i = 0; i < 1; ++i) {
+    const row = [];
+    for (let j = 0; j < 5; ++j) {
+      row.push(distortion_coefficients.data64F[i * 1 + j]);
+    }
+    distortion_coefficients_list.push(row);
+  }
+
+  localStorage.setItem("camera_matrix", JSON.stringify(camera_matrix_list));
+  localStorage.setItem("distortion_coefficients", JSON.stringify(distortion_coefficients_list));
+  
+  document.getElementById('status').innerHTML = `Calibration done. projection_error: ${projection_error}, camera_matrix: ${JSON.stringify(camera_matrix_list)}, distortion_coefficients ${JSON.stringify(distortion_coefficients_list)}`;
+
+  document.getElementById('capture').classList.remove("hidden");
+  document.getElementById('calibrate').classList.remove("hidden");
 }
 
 const handCommTarget = new EventTarget();
