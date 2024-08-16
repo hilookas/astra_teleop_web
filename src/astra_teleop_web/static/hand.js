@@ -11,8 +11,8 @@ async function capture() {
           exact: "user", // or environment
         },
         frameRate: { min: 30, ideal: 60, max: 60 },
-        width: { min: 640, ideal: 1920, max: 1920 },
-        height: { min: 480, ideal: 1080, max: 1080 }
+        width: { min: 640, ideal: 1280, max: 1280 },
+        height: { min: 480, ideal: 720, max: 720 }
       },
     });
   } catch (err) {
@@ -95,13 +95,30 @@ async function capture() {
   }
 
   const frame = new cv.Mat(height, width, cv.CV_8UC4);
+  const frame2 = new cv.Mat(height, width, cv.CV_8UC1);
   const dstFrame = new cv.Mat(height, width, cv.CV_8UC1);
+
+  const aruco_dict = cv.getPredefinedDictionary(cv.DICT_6X6_250)
+  const aruco_detection_parameters = new cv.aruco_DetectorParameters()
+  // aruco_detection_parameters.cornerRefinementMethod = cv.aruco.CORNER_REFINE_SUBPIX
+  aruco_detection_parameters.cornerRefinementMethod = cv.CORNER_REFINE_APRILTAG
+  // aruco_detection_parameters.cornerRefinementWinSize = 2
+  const detector = new cv.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, new cv.aruco_RefineParameters(10, 3, true))
+  
+  const corners = new cv.MatVector();
+  const ids = new cv.Mat();
+  const rejected = new cv.MatVector();
 
   while (true) {
     imread(frame)
-    // cv.cvtColor(frame, dstFrame, cv.COLOR_RGBA2GRAY);
+    cv.cvtColor(frame, frame2, cv.COLOR_RGBA2GRAY);
 
-    frame.copyTo(dstFrame)
+    const start = performance.now();
+    detector.detectMarkers(frame2, corners, ids, rejected)
+    const end = performance.now();
+    document.getElementById('aruco-timing').innerHTML = Math.round(end - start);
+
+    frame2.copyTo(dstFrame)
 
     imshow(dstFrame)
     await sleep(1);
