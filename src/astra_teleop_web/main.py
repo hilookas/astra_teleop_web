@@ -91,7 +91,12 @@ class WebServer:
         self.app.router.add_post("/offer-hand-{hand_type}", self.offer_hand)
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.app.router.add_static('/', os.path.join(script_dir, 'static'), show_index=True)
+        self.app.router.add_static('/', os.path.join(script_dir, 'static'), show_index=True, )
+        
+        async def on_prepare(request, response):
+            response.headers['Cross-Origin-Opener-Policy'] = 'same-origin'
+            response.headers['Cross-Origin-Embedder-Policy'] = 'require-corp'
+        self.app.on_response_prepare.append(on_prepare)
 
         # aiohttp.web.run_self.app(self.app, host="0.0.0.0", port=8088, loop=asyncio.get_event_loop())
         # See: https://github.com/aiortc/aiortc/issues/1116

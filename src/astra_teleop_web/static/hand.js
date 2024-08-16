@@ -37,6 +37,8 @@ async function capture() {
   const width = Math.max($video.videoWidth, $video.videoHeight);
   const height = Math.min($video.videoWidth, $video.videoHeight);
 
+  const cv2 = await cv;
+
   const $inCanvas = document.createElement('canvas');
   const inCtx = $inCanvas.getContext('2d', { willReadFrequently: true });
   $inCanvas.width = width;
@@ -57,11 +59,11 @@ async function capture() {
         $inRotateCanvas.width = $video.videoWidth;
         $inRotateCanvas.height = $video.videoHeight;
         
-        inRotateFrame = new cv.Mat($video.videoHeight, $video.videoWidth, cv.CV_8UC4);
+        inRotateFrame = new cv2.Mat($video.videoHeight, $video.videoWidth, cv2.CV_8UC4);
       }
       inRotateCtx.drawImage($video, 0, 0, $video.videoWidth, $video.videoHeight);
       inRotateFrame.data.set(inRotateCtx.getImageData(0, 0, $video.videoWidth, $video.videoHeight).data)
-      cv.rotate(inRotateFrame, mat, cv.ROTATE_90_CLOCKWISE)
+      cv2.rotate(inRotateFrame, mat, cv2.ROTATE_90_CLOCKWISE)
     }
   }
 
@@ -70,22 +72,22 @@ async function capture() {
   $outCanvas.width = 960;
   $outCanvas.height = 540;
   
-  const outFrame = new cv.Mat;
+  const outFrame = new cv2.Mat();
 
   function imshow(mat) {
-    cv.resize(mat, mat, new cv.Size(960, 540), 0, 0, cv.INTER_LINEAR) // lower resolution for faster output
+    cv2.resize(mat, mat, new cv2.Size(960, 540), 0, 0, cv2.INTER_LINEAR) // lower resolution for faster output
     const depth = mat.type() % 8;
-    const scale = depth <= cv.CV_8S ? 1 : depth <= cv.CV_32S ? 1 / 256 : 255;
-    const shift = depth === cv.CV_8S || depth === cv.CV_16S ? 128 : 0;
-    mat.convertTo(outFrame, cv.CV_8U, scale, shift);
+    const scale = depth <= cv2.CV_8S ? 1 : depth <= cv2.CV_32S ? 1 / 256 : 255;
+    const shift = depth === cv2.CV_8S || depth === cv2.CV_16S ? 128 : 0;
+    mat.convertTo(outFrame, cv2.CV_8U, scale, shift);
     switch (outFrame.type()) {
-    case cv.CV_8UC1:
-      cv.cvtColor(outFrame, outFrame, cv.COLOR_GRAY2RGBA);
+    case cv2.CV_8UC1:
+      cv2.cvtColor(outFrame, outFrame, cv2.COLOR_GRAY2RGBA);
       break;
-    case cv.CV_8UC3:
-      cv.cvtColor(outFrame, outFrame, cv.COLOR_RGB2RGBA);
+    case cv2.CV_8UC3:
+      cv2.cvtColor(outFrame, outFrame, cv2.COLOR_RGB2RGBA);
       break;
-    case cv.CV_8UC4:
+    case cv2.CV_8UC4:
       break;
     default:
       throw new Error("Bad number of channels (Source image must have 1, 3 or 4 channels)");
@@ -94,35 +96,38 @@ async function capture() {
     outCtx.putImageData(imgData, 0, 0);
   }
 
-  const frame = new cv.Mat(height, width, cv.CV_8UC4);
-  const frame2 = new cv.Mat(height, width, cv.CV_8UC1);
-  const dstFrame = new cv.Mat(height, width, cv.CV_8UC1);
+  const frame = new cv2.Mat(height, width, cv2.CV_8UC4);
+  const dstFrame = new cv2.Mat();
 
-  const aruco_dict = cv.getPredefinedDictionary(cv.DICT_6X6_250)
-  const aruco_detection_parameters = new cv.aruco_DetectorParameters()
-  // aruco_detection_parameters.cornerRefinementMethod = cv.aruco.CORNER_REFINE_SUBPIX
-  aruco_detection_parameters.cornerRefinementMethod = cv.CORNER_REFINE_APRILTAG
-  // aruco_detection_parameters.cornerRefinementWinSize = 2
-  const detector = new cv.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, new cv.aruco_RefineParameters(10, 3, true))
+  const aruco_dict = cv2.getPredefinedDictionary(cv2.DICT_6X6_250)
+  const aruco_detection_parameters = new cv2.aruco_DetectorParameters()
+  // aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG
+  const detector = new cv2.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, new cv2.aruco_RefineParameters(10, 3, true))
   
-  const corners = new cv.MatVector();
-  const ids = new cv.Mat();
-  const rejected = new cv.MatVector();
+  const corners = new cv2.MatVector();
+  const ids = new cv2.Mat();
+  const rejected = new cv2.MatVector();
 
-  while (true) {
-    imread(frame)
-    cv.cvtColor(frame, frame2, cv.COLOR_RGBA2GRAY);
-
-    const start = performance.now();
-    detector.detectMarkers(frame2, corners, ids, rejected)
-    const end = performance.now();
-    document.getElementById('aruco-timing').innerHTML = Math.round(end - start);
-
-    frame2.copyTo(dstFrame)
-
-    imshow(dstFrame)
-    await sleep(1);
+  function tick(){
+    if ($video.readyState === $video.HAVE_ENOUGH_DATA){
+      imread(frame)
+  
+      const start = performance.now();
+      detector.detectMarkers(frame, corners, ids, rejected)
+      const end = performance.now();
+      document.getElementById('aruco-timing').innerHTML = Math.round(end - start);
+      
+      // frame.copyTo(dstFrame)
+  
+      cv2.cvtColor(frame, dstFrame, cv2.COLOR_RGBA2RGB);
+      cv2.drawDetectedMarkers(dstFrame, corners, ids)
+  
+      imshow(dstFrame)
+    }
+    requestAnimationFrame(tick);
   }
+  
+  requestAnimationFrame(tick);
 }
 
 const handCommTarget = new EventTarget();

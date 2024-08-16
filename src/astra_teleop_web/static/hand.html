@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Astra Teleop (Hand)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="tailwind-play-cdn-3.4.5.js"></script>
 </head>
 <body>
 
@@ -28,7 +28,7 @@
         </div>
         <div>
             <audio id="audio"></audio>
-            <video id="video-hand" playsinline="true" muted="true" class="inline-block w-full"></video><br />
+            <video id="video-hand" playsinline="true" muted="true" class="inline-block w-full !hidden"></video><br />
             <canvas id="canvas-imshow" class="w-full"></canvas><br />
         </div>
         <p class="font-normal text-gray-700">
@@ -40,7 +40,7 @@
     </div>
 </div>
 
-<script src="opencv.js"></script>
+<script src="opencv_simd.js"></script>
 <script src="hand.js"></script>
 </body>
 </html>
