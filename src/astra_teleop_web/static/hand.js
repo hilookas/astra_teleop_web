@@ -2,6 +2,32 @@ function sleep(time) {
   return new Promise((resolve) => setTimeout(resolve, time));
 }
 
+async function capture() {
+  let stream;
+  try {
+     stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { 
+          exact: "user", // or environment
+        },
+        frameRate: { min: 30, ideal: 60, max: 60 },
+        width: { min: 1080, ideal: 1920, max: 1920 },
+        height: { min: 720, ideal: 1080, max: 1080 }
+      },
+    });
+  } catch (err) {
+    document.getElementById('status').innerHTML = `Error opening video capture (may be your cam have too low resolution): ${err.name} ${err.message}`;
+    throw err
+  }
+  document.getElementById('capture').classList.add("hidden");
+  
+  const track = stream.getVideoTracks()[0];
+  trackSetting = track.getSettings()
+  document.getElementById('status').innerHTML = `Using video device: ${track.label} ${trackSetting.width}x${trackSetting.height}@${trackSetting.frameRate}`;
+
+  document.getElementById('video_hand').srcObject = stream;
+}
+
 const handCommTarget = new EventTarget();
 
 async function start() {

@@ -18,6 +18,10 @@
            Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms
         </p>
         <div class="mb-3">
+            <button id="capture" onclick="capture()" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 border border-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                Start Capture
+            </button>
+
             <button id="start" onclick="start()" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 border border-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed">
                 Start Stream
             </button>
@@ -26,9 +30,13 @@
             <audio id="audio" autoplay="true"></audio>
             <video id="video_hand" autoplay="true" playsinline="true" muted="true" class="inline-block"></video><br />
         </div>
+        <p class="mt-3 font-normal text-gray-700">
+           Video capture from your device will NOT be uploaded to server, and will be processed on local with OpenCV.js
+        </p>
     </div>
 </div>
 
+<script src="opencv.js"></script>
 <script src="hand.js"></script>
 </body>
 </html>
