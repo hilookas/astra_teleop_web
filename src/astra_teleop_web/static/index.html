@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Astra Teleop</title>
     <script src="tailwind-play-cdn-3.4.5.js"></script>
+    <link href="flowbite.min.css" rel="stylesheet" />
 </head>
 <body>
 
@@ -25,8 +26,12 @@
             <button id="connect-pedal" onclick="connectPedal()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed">
                 Connect Pedal
             </button>
+            
+            <button id="calibrate-pedal" onclick="calibratePedal()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed">
+                Calibrate Pedal
+            </button>
         </div>
-        <div>
+        <div id="player" class="hidden">
             <audio id="audio"></audio>
             <video id="video-head" playsinline="true" muted="true" class="inline-block"></video><br />
             <video id="video-wrist-left" playsinline="true" muted="true" class="inline-block"></video><!-- remove space
@@ -48,8 +53,35 @@
             </div>
         </div>
     </div>
+    <div class="mx-auto p-6 bg-white border-y sm:border-x border-gray-200 sm:rounded-lg shadow mt-4">
+        <div>
+            <h6 class="mb-2 text-2xl font-bold tracking-tight text-gray-900">Pedal Status</h6>
+            <p id="pedal-status" class="mb-3 font-normal text-gray-700">
+                Connect pedal!
+            </p>
+            <!-- Ref: https://stackoverflow.com/questions/39809103/vertical-slider-for-chrome-and-moz -->
+            <div class="[writing-mode:vertical-lr] [direction:ltr]">
+                <!-- Ref: https://flowbite.com/docs/forms/range/ -->
+                <label for="pedal-linear-neg" class="block text-sm font-medium text-gray-900 dark:text-white">Linear -</label>
+                <input id="pedal-linear-neg" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+                <label for="pedal-linear-pos" class="block text-sm font-medium text-gray-900 dark:text-white">Linear +</label>
+                <input id="pedal-linear-pos" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+                <label for="pedal-angular-neg" class="block text-sm font-medium text-gray-900 dark:text-white">Angular -</label>
+                <input id="pedal-angular-neg" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+                <label for="pedal-angular-pos" class="block text-sm font-medium text-gray-900 dark:text-white">Angular +</label>
+                <input id="pedal-angular-pos" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+                <label for="pedal-mode-select" class="block text-sm font-medium text-gray-900 dark:text-white">Mode select</label>
+                <input id="pedal-mode-select" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+                <label for="pedal-left-gripper" class="block text-sm font-medium text-gray-900 dark:text-white">Left gripper</label>
+                <input id="pedal-left-gripper" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+                <label for="pedal-right-gripper" class="block text-sm font-medium text-gray-900 dark:text-white">Right gripper</label>
+                <input id="pedal-right-gripper" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+            </div>
+        </div>
+    </div>
 </div>
 
+<script src="flowbite.min.js"></script>
 <script src="qrcode.min.js"></script>
 <script src="index.js"></script>
 </body>

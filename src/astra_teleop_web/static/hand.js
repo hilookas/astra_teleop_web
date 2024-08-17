@@ -205,7 +205,7 @@ async function capture() {
       distortion_coefficients_list,
       corners_list_list,
       ids_list
-    ])}))
+    ]) }))
     
     // frame.copyTo(dstFrame)
 
