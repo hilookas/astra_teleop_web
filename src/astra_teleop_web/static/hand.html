@@ -15,7 +15,7 @@
             Loading...
         </p>
         <p class="mb-3 font-normal text-gray-700">
-           Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms
+            Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms | ArUco Timing: <span id="aruco-timing">INF</span>ms
         </p>
         <div class="mb-3">
             <button id="start" onclick="start()" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 border border-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed">
@@ -35,9 +35,6 @@
             <video id="video-hand" playsinline="true" muted="true" class="inline-block w-full !hidden"></video><br />
             <canvas id="canvas-imshow" class="w-full"></canvas><br />
         </div>
-        <p class="font-normal text-gray-700">
-           ArUco Timing: <span id="aruco-timing">INF</span>ms
-        </p>
         <p class="mt-3 font-normal text-gray-700">
            Video capture from your device will NOT be uploaded to server, and will be processed on local with OpenCV.js
         </p>

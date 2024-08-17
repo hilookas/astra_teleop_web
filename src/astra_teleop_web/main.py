@@ -20,6 +20,8 @@ import os
 from typing import Union
 import cv2
 import logging
+from pprint import pprint
+from astra_teleop.process import get_solve
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -72,6 +74,10 @@ class WebServer:
         self.track_head = None
         self.track_wrist_left = None
         self.track_wrist_right = None
+        
+        self.solve = get_solve()
+        self.left_handle_cb = None
+        self.right_handle_cb = None
 
         self.t = threading.Thread(target=asyncio_run_thread_in_new_loop, args=(self.run_server(), ), daemon=True)
         self.t.start()
@@ -196,7 +202,13 @@ class WebServer:
             if channel.label == "hand":
                 @channel.on("message")
                 async def on_message(msg):
-                    print(msg)
+                    camera_matrix, distortion_coefficients, corners, ids = json.loads(msg)
+                    self.solve(
+                        camera_matrix, distortion_coefficients, 
+                        corners, ids, 
+                        self.left_handle_cb if hand_type == 'left' else None, 
+                        self.right_handle_cb if hand_type == 'right' else None
+                    )
             else:
                 raise Exception("Unknown label")
 
@@ -274,6 +286,15 @@ def main():
     threading.Thread(target=feed_webserver, args=(webserver, "head"), daemon=True).start()
     threading.Thread(target=feed_webserver, args=(webserver, "wrist_left"), daemon=True).start()
     threading.Thread(target=feed_webserver, args=(webserver, "wrist_right"), daemon=True).start()
+    
+    def cb(tag2cam):
+        print("left")
+        pprint(tag2cam)
+    webserver.left_handle_cb = cb
+    def cb(tag2cam):
+        print("right")
+        pprint(tag2cam)
+    webserver.right_handle_cb = cb
     
     while True:
         time.sleep(0.1)

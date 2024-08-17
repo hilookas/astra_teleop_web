@@ -119,16 +119,30 @@ async function initOpenCV($video) {
 }
 
 async function capture() {
+  if (localStorage.getItem("camera_matrix") === null) {
+    document.getElementById('status').innerHTML = `You need calibrate camera first`;
+    return;
+  }
+  const camera_matrix_list = JSON.parse(localStorage.getItem("camera_matrix"));
+  const distortion_coefficients_list = JSON.parse(localStorage.getItem("distortion_coefficients"));
+
   const $video = await getMedia();
   const { width, height, imread, imshow } = await initOpenCV($video);
 
   const frame = new cv2.Mat(height, width, cv2.CV_8UC4);
   const dstFrame = new cv2.Mat();
 
-  const aruco_dict = cv2.getPredefinedDictionary(cv2.DICT_6X6_250)
-  const aruco_detection_parameters = new cv2.aruco_DetectorParameters()
-  // aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG
-  const detector = new cv2.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, new cv2.aruco_RefineParameters(10, 3, true))
+  const aruco_dict = cv2.getPredefinedDictionary(cv2.DICT_6X6_250);
+  const aruco_detection_parameters = new cv2.aruco_DetectorParameters();
+  // aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG;
+  const refine_parameters = new cv2.aruco_RefineParameters(10, 3, true)
+  const detector = new cv2.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, refine_parameters);
+  
+  const fromServerCb = async function (evt) {
+    console.dir(evt.detail);
+  }
+
+  handCommTarget.addEventListener('fromServer', fromServerCb);
 
   while (true) {
     await waitFrame($video);
@@ -143,12 +157,55 @@ async function capture() {
     const end = performance.now();
     document.getElementById('aruco-timing').innerHTML = Math.round(end - start);
 
-    for (let i = 0; i < corners.size(); ++i) {
-      console.log(corners.get(i).cols)
-      console.log(corners.get(i).rows)
-      console.dir(corners.get(i).data32F) // type(): cv2.CV_32FC2
+    // for (let l = 0; l < corners.size(); ++l) {
+    //   const temp_corners = corners.get(l);
+    //   console.log(temp_corners.rows)
+    //   console.log(temp_corners.cols)
+    //   console.dir(temp_corners.type()) // type(): cv2.CV_32FC2
+    //   console.dir(temp_corners.data32F)
+    // }
+    // console.dir(ids.type()) // type(): cv2.CV_32SC1
+    // console.dir(ids.data32S) // type(): cv2.CV_32SC1
+    
+    const corners_list_list = [];
+    for (let l = 0; l < corners.size(); ++l) {
+      const temp_corners = corners.get(l);
+      const corners_list = [];
+      const rows = temp_corners.rows;
+      const cols = temp_corners.cols;
+      const channels = Math.trunc(temp_corners.type() / 8) + 1;
+      for (let i = 0; i < rows; ++i) {
+        const row = [];
+        for (let j = 0; j < cols; ++j) {
+          const point = [];
+          for (let k = 0; k < channels; ++k) {
+            point.push(temp_corners.data32F[(i * cols + j) * channels + k]);
+          }
+          row.push(point);
+        }
+        corners_list.push(row);
+      }
+      corners_list_list.push(corners_list);
     }
-    console.dir(ids.type().data32S) // type(): cv2.CV_32SC1
+    
+    const ids_list = [];
+    for (let i = 0; i < ids.rows; ++i) {
+      const row = [];
+      for (let j = 0; j < ids.cols; ++j) {
+        row.push(ids.data32S[i * ids.cols + j]);
+      }
+      ids_list.push(row);
+    }
+
+    // console.dir(corners_list_list)
+    // console.dir(ids_list)
+    
+    handCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify([
+      camera_matrix_list,
+      distortion_coefficients_list,
+      corners_list_list,
+      ids_list
+    ])}))
     
     // frame.copyTo(dstFrame)
 
@@ -161,6 +218,16 @@ async function capture() {
     ids.delete()
     rejected.delete()
   }
+
+  handCommTarget.removeEventListener('fromServer', fromServerCb);
+
+  frame.delete();
+  dstFrame.delete();
+
+  aruco_dict.delete();
+  aruco_detection_parameters.delete();
+  refine_parameters.delete();
+  detector.delete();
 }
 
 async function calibrate() {
@@ -191,7 +258,6 @@ async function calibrate() {
   
   while (cnt < max_cnt) {
     await waitFrame($video);
-
     imread(frame);
     cv2.cvtColor(frame, dstFrame, cv2.COLOR_RGBA2RGB);
     
@@ -282,19 +348,19 @@ async function calibrate() {
   // console.dir(projection_error);
 
   const camera_matrix_list = [];
-  for (let i = 0; i < 3; ++i) {
+  for (let i = 0; i < camera_matrix.rows; ++i) {
     const row = [];
-    for (let j = 0; j < 3; ++j) {
-      row.push(camera_matrix.data64F[i * 3 + j]);
+    for (let j = 0; j < camera_matrix.cols; ++j) {
+      row.push(camera_matrix.data64F[i * camera_matrix.cols + j]);
     }
     camera_matrix_list.push(row);
   }
   
   const distortion_coefficients_list = [];
-  for (let i = 0; i < 1; ++i) {
+  for (let i = 0; i < distortion_coefficients.rows; ++i) {
     const row = [];
-    for (let j = 0; j < 5; ++j) {
-      row.push(distortion_coefficients.data64F[i * 1 + j]);
+    for (let j = 0; j < distortion_coefficients.cols; ++j) {
+      row.push(distortion_coefficients.data64F[i * distortion_coefficients.cols + j]);
     }
     distortion_coefficients_list.push(row);
   }
@@ -302,7 +368,26 @@ async function calibrate() {
   localStorage.setItem("camera_matrix", JSON.stringify(camera_matrix_list));
   localStorage.setItem("distortion_coefficients", JSON.stringify(distortion_coefficients_list));
   
-  document.getElementById('status').innerHTML = `Calibration done. projection_error: ${projection_error}, camera_matrix: ${JSON.stringify(camera_matrix_list)}, distortion_coefficients ${JSON.stringify(distortion_coefficients_list)}`;
+  document.getElementById('status').innerHTML = `Calibration result saved! projection_error: ${projection_error}, camera_matrix: ${JSON.stringify(camera_matrix_list)}, distortion_coefficients ${JSON.stringify(distortion_coefficients_list)}`;
+
+  frame.delete();
+  dstFrame.delete();
+
+  aruco_dict.delete();
+  aruco_board.delete();
+
+  charuco_parameters.delete();
+  detector_parameters.delete();
+  refine_parameters.delete();
+  charuco_detector.delete();
+
+  all_object_points.delete();
+  all_image_points.delete();
+
+  camera_matrix.delete();
+  distortion_coefficients.delete();
+  rotation_vectors.delete();
+  translation_vectors.delete();
 
   document.getElementById('capture').classList.remove("hidden");
   document.getElementById('calibrate').classList.remove("hidden");

@@ -133,10 +133,12 @@ async function connectPedal() {
   const encoder = new TextEncoder();
   const writer = port.writable.getWriter();
 
-  pedalCommTarget.addEventListener('fromServer', async function (evt) {
-    console.dir(evt.detail)
-    await writer.write(evt.detail)
-  })
+  const fromServerCb = async function (evt) {
+    console.dir(evt.detail);
+    await writer.write(evt.detail);
+  }
+
+  pedalCommTarget.addEventListener('fromServer', fromServerCb);
 
   while (port.readable) {
     // see: https://web.dev/articles/streams?hl=zh-cn#creating_a_readable_byte_stream
@@ -187,6 +189,8 @@ async function connectPedal() {
     }
   }
   writer.releaseLock();
+
+  pedalCommTarget.removeEventListener('fromServer', fromServerCb);
 
   document.getElementById('connect-pedal').classList.remove("hidden");
   document.getElementById('status').innerHTML = 'Pedel disconnected.';
