@@ -279,8 +279,7 @@ def feed_webserver_av(webserver, device):
         except:
             pass
 
-
-def main():
+if __name__ == '__main__':
     webserver = WebServer()
     
     threading.Thread(target=feed_webserver, args=(webserver, "head"), daemon=True).start()
@@ -298,6 +297,3 @@ def main():
     
     while True:
         time.sleep(0.1)
-
-if __name__ == '__main__':
-    main()
