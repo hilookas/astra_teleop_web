@@ -76,8 +76,9 @@ class WebServer:
         self.track_wrist_right = None
         
         self.solve = get_solve()
-        self.left_handle_cb = None
-        self.right_handle_cb = None
+        self.left_hand_cb = None
+        self.right_hand_cb = None
+        self.pedal_cb = None
 
         self.t = threading.Thread(target=asyncio_run_thread_in_new_loop, args=(self.run_server(), ), daemon=True)
         self.t.start()
@@ -149,7 +150,9 @@ class WebServer:
             if channel.label == "pedal":
                 @channel.on("message")
                 async def on_message(msg):
-                    print(msg)
+                    pedal_real_values = json.loads(msg)
+                    if self.pedal_cb:
+                        self.pedal_cb(pedal_real_values)
             else:
                 raise Exception("Unknown label")
 
@@ -206,8 +209,8 @@ class WebServer:
                     self.solve(
                         camera_matrix, distortion_coefficients, 
                         corners, ids, 
-                        self.left_handle_cb if hand_type == 'left' else None, 
-                        self.right_handle_cb if hand_type == 'right' else None
+                        self.left_hand_cb if hand_type == 'left' else None, 
+                        self.right_hand_cb if hand_type == 'right' else None
                     )
             else:
                 raise Exception("Unknown label")
@@ -289,11 +292,15 @@ if __name__ == '__main__':
     def cb(tag2cam):
         print("left")
         pprint(tag2cam)
-    webserver.left_handle_cb = cb
+    webserver.left_hand_cb = cb
     def cb(tag2cam):
         print("right")
         pprint(tag2cam)
-    webserver.right_handle_cb = cb
+    webserver.right_hand_cb = cb
+    def cb(pedal_real_values):
+        print("pedal")
+        pprint(pedal_real_values)
+    webserver.pedal_cb = cb
     
     while True:
         time.sleep(0.1)
