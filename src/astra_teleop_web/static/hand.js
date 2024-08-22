@@ -95,6 +95,7 @@ async function initOpenCV($video) {
 
   function imshow(mat) {
     cv2.resize(mat, mat, new cv2.Size(960, 540), 0, 0, cv2.INTER_LINEAR) // lower resolution for faster output
+    cv2.flip(mat, mat, 1)
     const depth = mat.type() % 8;
     const scale = depth <= cv2.CV_8S ? 1 : depth <= cv2.CV_32S ? 1 / 256 : 255;
     const shift = depth === cv2.CV_8S || depth === cv2.CV_16S ? 128 : 0;
@@ -210,13 +211,13 @@ async function capture() {
     // frame.copyTo(dstFrame)
 
     cv2.cvtColor(frame, dstFrame, cv2.COLOR_RGBA2RGB);
-    cv2.drawDetectedMarkers(dstFrame, corners, ids)
+    cv2.drawDetectedMarkers(dstFrame, corners, ids);
 
-    imshow(dstFrame)
+    imshow(dstFrame);
 
-    corners.delete()
-    ids.delete()
-    rejected.delete()
+    corners.delete();
+    ids.delete();
+    rejected.delete();
   }
 
   handCommTarget.removeEventListener('fromServer', fromServerCb);
