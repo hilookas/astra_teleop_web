@@ -75,10 +75,11 @@ class WebServer:
         self.track_wrist_left = None
         self.track_wrist_right = None
         
-        self.solve = get_solve()
+        self.solve = get_solve(scale=1.5) # scale means to amplify motion
         self.left_hand_cb = None
         self.right_hand_cb = None
         self.pedal_cb = None
+        self.control_cb = None
 
         self.t = threading.Thread(target=asyncio_run_thread_in_new_loop, args=(self.run_server(), ), daemon=True)
         self.t.start()
@@ -153,6 +154,12 @@ class WebServer:
                     pedal_real_values = json.loads(msg)
                     if self.pedal_cb:
                         self.pedal_cb(pedal_real_values)
+            elif channel.label == "control":
+                @channel.on("message")
+                async def on_message(msg):
+                    control_type = json.loads(msg)
+                    if self.control_cb:
+                        self.control_cb(control_type)
             else:
                 raise Exception("Unknown label")
 

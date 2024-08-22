@@ -3,6 +3,7 @@ function sleep(time) {
 }
 
 const pedalCommTarget = new EventTarget();
+const controlCommTarget = new EventTarget();
 
 async function start() {
   document.getElementById('start').classList.add("hidden");
@@ -35,6 +36,7 @@ async function start() {
   pc.addTransceiver('video', { direction: 'recvonly' });
 
   const pedalChannel = pc.createDataChannel("pedal")
+  const controlChannel = pc.createDataChannel("control")
 
   const toServerCb = async function (evt) {
     pedalChannel.send(evt.detail)
@@ -50,6 +52,22 @@ async function start() {
 
   pedalChannel.addEventListener('close', function (evt) {
     pedalCommTarget.removeEventListener('toServer', toServerCb);
+  })
+
+  const controlToServerCb = async function (evt) {
+    controlChannel.send(evt.detail)
+  }
+
+  controlChannel.addEventListener('open', function (evt) {
+    controlCommTarget.addEventListener('toServer', controlToServerCb);
+
+    controlChannel.addEventListener('message', function (evt) {
+      controlCommTarget.dispatchEvent(new CustomEvent("fromServer", { detail: evt.data }))
+    })
+  })
+
+  controlChannel.addEventListener('close', function (evt) {
+    controlCommTarget.removeEventListener('toServer', controlToServerCb);
   })
 
   // Display statistics
@@ -192,7 +210,7 @@ async function getSerial() {
 
 const PEDAL_MAX = 4096;
 
-const pedalNames = ["linear-neg", "linear-pos", "angular-neg", "angular-pos", "mode-select", "left-gripper", "right-gripper"];
+const pedalNames = ["angular-pos", "angular-neg", "linear-neg", "linear-pos", "mode-select", "left-gripper", "right-gripper"];
 const pedalIds = [0, 1, 2, 3, 4, 6, 7];
 
 function getPedalValues(buffer) {
@@ -343,4 +361,34 @@ window.addEventListener('load', function () {
   });
   
   document.getElementById('link-right').href = leftHandURL;
+
+
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      const keyName = event.key;
+  
+      if (keyName === "Control") {
+        // do not alert when only Control key is pressed.
+        return;
+      }
+  
+      if (event.ctrlKey) {
+        // Even though event.key is not 'Control' (e.g., 'a' is pressed),
+        // event.ctrlKey may be true if Ctrl key is pressed at the same time.
+        // alert(`Combination of ctrlKey + ${keyName}`);
+        return;
+      } else {
+        if (keyName == 'z') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("disable_arms") }))
+        } else if (keyName == 'x') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("enable_arms") }))
+        } else if (keyName == 'c') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("reset_arms") }))
+        }
+      }
+    },
+    false,
+  );
 })

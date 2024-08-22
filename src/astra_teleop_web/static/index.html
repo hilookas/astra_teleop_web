@@ -31,6 +31,9 @@
                 Calibrate Pedal
             </button>
         </div>
+        <p class="mb-3 font-normal text-gray-700">
+            Shortcuts: [z] for disable arms, [x] for enable arms, [c] for reset arms to middle position
+        </p>
         <div id="player" class="hidden">
             <audio id="audio"></audio>
             <video id="video-head" playsinline="true" muted="true" class="inline-block"></video><br />
@@ -62,14 +65,14 @@
             <!-- Ref: https://stackoverflow.com/questions/39809103/vertical-slider-for-chrome-and-moz -->
             <div class="[writing-mode:vertical-lr] [direction:ltr]">
                 <!-- Ref: https://flowbite.com/docs/forms/range/ -->
+                <label for="pedal-angular-pos" class="block text-sm font-medium text-gray-900 dark:text-white">Angular +</label>
+                <input id="pedal-angular-pos" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
+                <label for="pedal-angular-neg" class="block text-sm font-medium text-gray-900 dark:text-white">Angular -</label>
+                <input id="pedal-angular-neg" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
                 <label for="pedal-linear-neg" class="block text-sm font-medium text-gray-900 dark:text-white">Linear -</label>
                 <input id="pedal-linear-neg" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
                 <label for="pedal-linear-pos" class="block text-sm font-medium text-gray-900 dark:text-white">Linear +</label>
                 <input id="pedal-linear-pos" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
-                <label for="pedal-angular-neg" class="block text-sm font-medium text-gray-900 dark:text-white">Angular -</label>
-                <input id="pedal-angular-neg" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
-                <label for="pedal-angular-pos" class="block text-sm font-medium text-gray-900 dark:text-white">Angular +</label>
-                <input id="pedal-angular-pos" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
                 <label for="pedal-mode-select" class="block text-sm font-medium text-gray-900 dark:text-white">Mode select</label>
                 <input id="pedal-mode-select" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
                 <label for="pedal-left-gripper" class="block text-sm font-medium text-gray-900 dark:text-white">Left gripper</label>
