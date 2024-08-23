@@ -29,7 +29,7 @@ logging.basicConfig(level=logging.INFO)
 class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
     kind = 'video'
 
-    def __init__(self, VIDEO_PTIME=1/32, VIDEO_CLOCK_RATE=90000):
+    def __init__(self, VIDEO_PTIME=1/40, VIDEO_CLOCK_RATE=90000):
         super().__init__()
         self.VIDEO_PTIME = VIDEO_PTIME
         self.VIDEO_CLOCK_RATE = VIDEO_CLOCK_RATE
