@@ -381,14 +381,20 @@ window.addEventListener('load', function () {
         return;
       } else {
         if (keyName == 'z') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("disable_arms") }))
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("disable_arm_teleop") }))
         } else if (keyName == 'x') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("enable_arms") }))
-        } else if (keyName == 'c') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("reset_arms") }))
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("enable_arm_teleop") }))
+        } else if (keyName == 'r') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("reset") }))
+        } else if (keyName == 'f') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("done") }))
         }
       }
     },
     false,
   );
+
+  controlCommTarget.addEventListener('fromServer', async function (evt) {
+    document.getElementById('status').innerHTML = JSON.parse(evt.detail);
+  });
 })

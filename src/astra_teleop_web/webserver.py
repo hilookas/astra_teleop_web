@@ -80,6 +80,8 @@ class WebServer:
         self.right_hand_cb = None
         self.pedal_cb = None
         self.control_cb = None
+        
+        self.datachannel = None
 
         self.t = threading.Thread(target=asyncio_run_thread_in_new_loop, args=(self.run_server(), ), daemon=True)
         self.t.start()
@@ -142,11 +144,14 @@ class WebServer:
             if pc.connectionState == "failed":
                 await pc.close()
                 del self.pc['head']
+                self.datachannel = None
             elif pc.connectionState == "closed":
                 del self.pc['head']
+                self.datachannel = None
                 
         @pc.on("datachannel")
         def on_datachannel(channel):
+            self.datachannel = channel
             logger.info("channel(%s) - %s" % (channel.label, repr("created by remote party")))
             if channel.label == "pedal":
                 @channel.on("message")
