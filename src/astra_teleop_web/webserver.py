@@ -10,7 +10,6 @@ import av
 import av.frame
 import av.packet
 import av.video
-import PIL.Image
 import fractions
 import ssl
 import threading
@@ -22,6 +21,7 @@ import cv2
 import logging
 from pprint import pprint
 from astra_teleop.process import get_solve
+import numpy as np
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -40,7 +40,7 @@ class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
             raise aiortc.mediastreams.MediaStreamError
         
         image = await asyncio.get_running_loop().run_in_executor(None, self.q.get)
-        frame = av.video.VideoFrame.from_image(image)
+        frame = av.video.VideoFrame.from_ndarray(image) # shape: (height, width, channel) dtype: np.uint8 [0,255]
 
         if hasattr(self, "_timestamp"):
             self._timestamp += int(self.VIDEO_PTIME * self.VIDEO_CLOCK_RATE)
@@ -52,7 +52,7 @@ class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
 
         return frame
     
-    def feed(self, image: PIL.Image):
+    def feed(self, image: np.ndarray):
         try:
             self.q.put_nowait(image)
         except queue.Full:
@@ -259,12 +259,11 @@ def feed_webserver(webserver, device):
     
     while True:
         ret, color_image = cam.read()
-        color_converted = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-        image = PIL.Image.fromarray(color_converted)
+        image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
         if device == "head":
-            image = image.resize((1280, 720))
+            image = cv2.resize(image, (1280, 720))
         else:
-            image = image.resize((640, 360))
+            image = cv2.resize(image, (640, 360))
         try:
             getattr(webserver, f"track_{device}").feed(image)
         except:
@@ -284,11 +283,11 @@ def feed_webserver_av(webserver, device):
             # Too large for latency
             # https://github.com/FFmpeg/FFmpeg/blob/66c05dc03163998fb9a90ebd53e2c39a4f95b7ea/libavdevice/v4l2.c#L55
             continue
-        image = frame.to_image()
+        image = frame.to_rgb().to_ndarray()
         if device == "head":
-            image = image.resize((1280, 720))
+            image = cv2.resize(image, (1280, 720))
         else:
-            image = image.resize((640, 360))
+            image = cv2.resize(image, (640, 360))
         try:
             getattr(webserver, f"track_{device}").feed(image)
         except:
