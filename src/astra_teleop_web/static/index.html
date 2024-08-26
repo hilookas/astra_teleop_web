@@ -36,9 +36,9 @@
         </p>
         <div id="player" class="hidden">
             <audio id="audio"></audio>
-            <video id="video-head" playsinline="true" muted="true" class="inline-block"></video><br />
-            <video id="video-wrist-left" playsinline="true" muted="true" class="inline-block"></video><!-- remove space
-            --><video id="video-wrist-right" playsinline="true" muted="true" class="inline-block"></video>
+            <video id="video-head" playsinline="true" muted="true" style="object-fit: initial; width: 100%;" class="inline-block"></video><br />
+            <video id="video-wrist-left" playsinline="true" muted="true" style="object-fit: initial; width: 50%;" class="inline-block"></video><!-- remove space
+            --><video id="video-wrist-right" playsinline="true" muted="true" style="object-fit: initial; width: 50%;" class="inline-block"></video>
         </div>
     </div>
     <div class="mx-auto p-6 bg-white border-y sm:border-x border-gray-200 sm:rounded-lg shadow mt-4">
@@ -73,12 +73,6 @@
                 <input id="pedal-linear-neg" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
                 <label for="pedal-linear-pos" class="block text-sm font-medium text-gray-900 dark:text-white">Linear +</label>
                 <input id="pedal-linear-pos" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
-                <label for="pedal-mode-select" class="block text-sm font-medium text-gray-900 dark:text-white">Mode select</label>
-                <input id="pedal-mode-select" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
-                <label for="pedal-left-gripper" class="block text-sm font-medium text-gray-900 dark:text-white">Left gripper</label>
-                <input id="pedal-left-gripper" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
-                <label for="pedal-right-gripper" class="block text-sm font-medium text-gray-900 dark:text-white">Right gripper</label>
-                <input id="pedal-right-gripper" type="range" orient="vertical" value="50" class="mr-6 w-2 h-full bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700" disabled>
             </div>
         </div>
     </div>

@@ -210,8 +210,8 @@ async function getSerial() {
 
 const PEDAL_MAX = 4096;
 
-const pedalNames = ["angular-pos", "angular-neg", "linear-neg", "linear-pos", "mode-select", "left-gripper", "right-gripper"];
-const pedalIds = [0, 1, 2, 3, 4, 6, 7];
+const pedalNames = ["angular-pos", "angular-neg", "linear-neg", "linear-pos"];
+const pedalIds = [0, 1, 2, 3];
 
 function getPedalValues(buffer) {
   let pedalValues = [];
