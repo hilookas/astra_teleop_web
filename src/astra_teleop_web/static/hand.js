@@ -135,7 +135,8 @@ async function capture() {
 
   const aruco_dict = cv2.getPredefinedDictionary(cv2.DICT_6X6_250);
   const aruco_detection_parameters = new cv2.aruco_DetectorParameters();
-  // aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG;
+  aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG; // Provide subpixel accuracy
+  aruco_detection_parameters.aprilTagQuadDecimate = 2; // Speed up for wasm
   const refine_parameters = new cv2.aruco_RefineParameters(10, 3, true)
   const detector = new cv2.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, refine_parameters);
   

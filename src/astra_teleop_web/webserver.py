@@ -260,10 +260,12 @@ def feed_webserver(webserver, device):
     while True:
         ret, color_image = cam.read()
         image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-        if device == "head":
-            image = cv2.resize(image, (1280, 720))
-        else:
-            image = cv2.resize(image, (640, 360))
+        assert image.shape[0] == 360 and image.shape[1] == 640
+        # if device == "head":
+        #     # image = cv2.resize(image, (1280, 720))
+        #     image = cv2.resize(image, (640, 360))
+        # else:
+        #     image = cv2.resize(image, (640, 360))
         try:
             getattr(webserver, f"track_{device}").feed(image)
         except:
