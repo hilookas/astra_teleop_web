@@ -360,7 +360,18 @@ window.addEventListener('load', function () {
     correctLevel : QRCode.CorrectLevel.L
   });
   
-  document.getElementById('link-right').href = leftHandURL;
+  document.getElementById('link-right').href = rightHandURL;
+
+  const bothHandURL = location.protocol + '//' + location.host + "/hand.html#both";
+  
+  new QRCode("qrcode-both", {
+    text: bothHandURL,
+    width: 128,
+    height: 128,
+    correctLevel : QRCode.CorrectLevel.L
+  });
+  
+  document.getElementById('link-both').href = bothHandURL;
 
 
 

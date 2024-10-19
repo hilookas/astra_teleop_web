@@ -503,8 +503,10 @@ window.addEventListener('load', function () {
     document.getElementById('which-hand').innerHTML = 'Left ';
   } else if (handType === "right") {
     document.getElementById('which-hand').innerHTML = 'Right ';
+  } else if (handType === "both") {
+    document.getElementById('which-hand').innerHTML = 'Both ';
   } else {
-    document.getElementById('status').innerHTML = "Hand type must be 'left' or 'right'";
+    document.getElementById('status').innerHTML = "Hand type must be 'left', 'right', or 'both'";
     document.getElementById('start').classList.add("hidden");
     handType = null;
     return;

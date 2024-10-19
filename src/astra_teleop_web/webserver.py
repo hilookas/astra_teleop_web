@@ -190,8 +190,8 @@ class WebServer:
     async def offer_hand(self, request):
         params = await request.json()
         hand_type = request.match_info["hand_type"]
-        if hand_type not in [ 'left', 'right' ]:
-            raise aiohttp.web.HTTPBadRequest(reason="Hand type must be 'left' or 'right'")
+        if hand_type not in [ 'left', 'right', 'both' ]:
+            raise aiohttp.web.HTTPBadRequest(reason="Hand type must be 'left', 'right', or 'both'")
     
         params = await request.json()
 
@@ -221,8 +221,8 @@ class WebServer:
                     self.solve(
                         camera_matrix, distortion_coefficients, 
                         corners, ids, 
-                        self.left_hand_cb if hand_type == 'left' else None, 
-                        self.right_hand_cb if hand_type == 'right' else None
+                        self.left_hand_cb if hand_type == 'left' or hand_type == 'both' else None, 
+                        self.right_hand_cb if hand_type == 'right' or hand_type == 'both' else None
                     )
             else:
                 raise Exception("Unknown label")
