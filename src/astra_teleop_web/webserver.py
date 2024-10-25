@@ -75,7 +75,7 @@ class WebServer:
         self.track_wrist_left = None
         self.track_wrist_right = None
         
-        self.solve = get_solve(scale=1.5) # scale means to amplify motion
+        self.solve = get_solve(scale=1.0) # scale means to amplify motion
         self.left_hand_cb = None
         self.right_hand_cb = None
         self.pedal_cb = None
