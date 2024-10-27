@@ -133,10 +133,11 @@ async function capture() {
   const frame = new cv2.Mat(height, width, cv2.CV_8UC4);
   const dstFrame = new cv2.Mat();
 
-  const aruco_dict = cv2.getPredefinedDictionary(cv2.DICT_6X6_250);
+  const aruco_dict = cv2.getPredefinedDictionary(cv2.DICT_4X4_50);
   const aruco_detection_parameters = new cv2.aruco_DetectorParameters();
-  aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG; // Provide subpixel accuracy
-  aruco_detection_parameters.aprilTagQuadDecimate = 2; // Speed up for wasm
+  aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_SUBPIX; // Faster
+  // aruco_detection_parameters.cornerRefinementMethod = cv2.CORNER_REFINE_APRILTAG; // Provide subpixel accuracy
+  // aruco_detection_parameters.aprilTagQuadDecimate = 2; // Speed up for wasm
   const refine_parameters = new cv2.aruco_RefineParameters(10, 3, true)
   const detector = new cv2.aruco_ArucoDetector(aruco_dict, aruco_detection_parameters, refine_parameters);
   
