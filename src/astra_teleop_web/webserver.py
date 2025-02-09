@@ -98,7 +98,6 @@ class WebServer:
         self.app.on_shutdown.append(on_shutdown)
 
         self.app.router.add_post("/offer", self.offer)
-        self.app.router.add_post("/offer-hand-{hand_type}", self.offer_hand)
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
         self.app.router.add_static('/', os.path.join(script_dir, 'static'), show_index=True, )
@@ -165,6 +164,16 @@ class WebServer:
                     control_type = json.loads(msg)
                     if self.control_cb:
                         self.control_cb(control_type)
+            elif channel.label == "hand":
+                @channel.on("message")
+                async def on_message(msg):
+                    camera_matrix, distortion_coefficients, corners, ids = json.loads(msg)
+                    self.solve(
+                        camera_matrix, distortion_coefficients, 
+                        corners, ids, 
+                        self.left_hand_cb,
+                        self.right_hand_cb
+                    )
             else:
                 raise Exception("Unknown label")
 
@@ -187,66 +196,14 @@ class WebServer:
             ),
         )
 
-    async def offer_hand(self, request):
-        params = await request.json()
-        hand_type = request.match_info["hand_type"]
-        if hand_type not in [ 'left', 'right', 'both' ]:
-            raise aiohttp.web.HTTPBadRequest(reason="Hand type must be 'left', 'right', or 'both'")
-    
-        params = await request.json()
-
-        offer = aiortc.RTCSessionDescription(sdp=params["sdp"], type=params["type"])
-        
-        if 'hand_' + hand_type in self.pc:
-            raise aiohttp.web.HTTPBadRequest(reason="Multiple connection! Wait for last connection is done")
-
-        self.pc['hand_' + hand_type] = pc = aiortc.RTCPeerConnection()
-
-        @pc.on("connectionstatechange")
-        async def on_connectionstatechange():
-            logger.info("Connection state is %s" % pc.connectionState)
-            if pc.connectionState == "failed":
-                await pc.close()
-                del self.pc['hand_' + hand_type]
-            elif pc.connectionState == "closed":
-                del self.pc['hand_' + hand_type]
-                
-        @pc.on("datachannel")
-        def on_datachannel(channel):
-            logger.info("channel(%s) - %s" % (channel.label, repr("created by remote party")))
-            if channel.label == "hand":
-                @channel.on("message")
-                async def on_message(msg):
-                    camera_matrix, distortion_coefficients, corners, ids = json.loads(msg)
-                    self.solve(
-                        camera_matrix, distortion_coefficients, 
-                        corners, ids, 
-                        self.left_hand_cb if hand_type == 'left' or hand_type == 'both' else None, 
-                        self.right_hand_cb if hand_type == 'right' or hand_type == 'both' else None
-                    )
-            else:
-                raise Exception("Unknown label")
-
-        await pc.setRemoteDescription(offer)
-
-        answer = await pc.createAnswer()
-        await pc.setLocalDescription(answer)
-
-        return aiohttp.web.Response(
-            content_type="application/json",
-            text=json.dumps(
-                {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
-            ),
-        )
-
 def feed_webserver(webserver, device):
     cam = cv2.VideoCapture(f"/dev/video_{device}", cv2.CAP_V4L2)
     cam.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     fourcc_value = cv2.VideoWriter_fourcc(*'MJPG')
 
-    image_height = 1080
-    image_width = 1920
+    image_height = 360
+    image_width = 640
 
     image_size = (image_height, image_width)
 
@@ -261,11 +218,6 @@ def feed_webserver(webserver, device):
         ret, color_image = cam.read()
         image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
         assert image.shape[0] == 360 and image.shape[1] == 640
-        # if device == "head":
-        #     # image = cv2.resize(image, (1280, 720))
-        #     image = cv2.resize(image, (640, 360))
-        # else:
-        #     image = cv2.resize(image, (640, 360))
         try:
             getattr(webserver, f"track_{device}").feed(image)
         except:
@@ -276,7 +228,7 @@ def feed_webserver_av(webserver, device):
     container = av.open(f"/dev/video_{device}", format="v4l2", options={
         "input_format": "mjpeg",
         "framerate": "30",
-        "video_size": "1920x1080",
+        "video_size": "640x360",
     })
 
     for index, frame in enumerate(container.decode(video=0)):
@@ -286,10 +238,7 @@ def feed_webserver_av(webserver, device):
             # https://github.com/FFmpeg/FFmpeg/blob/66c05dc03163998fb9a90ebd53e2c39a4f95b7ea/libavdevice/v4l2.c#L55
             continue
         image = frame.to_rgb().to_ndarray()
-        if device == "head":
-            image = cv2.resize(image, (1280, 720))
-        else:
-            image = cv2.resize(image, (640, 360))
+        assert image.shape[0] == 360 and image.shape[1] == 640
         try:
             getattr(webserver, f"track_{device}").feed(image)
         except:
