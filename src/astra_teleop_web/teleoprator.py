@@ -1,0 +1,216 @@
+import asyncio
+import threading
+import logging
+
+import numpy as np
+from pytransform3d import transformations as pt
+from pytransform3d import rotations as pr
+import math
+
+from astra_teleop.process import get_solve
+from astra_teleop_web.webserver import WebServer
+
+logger = logging.getLogger(__name__)
+
+GRIPPER_MAX = 0.055
+
+class Teleopoperator:
+    def __init__(self):
+        self.solve = get_solve(scale=1.0) # scale means to amplify motion
+        
+        self.webserver = WebServer()
+        self.webserver.on_hand = self.hand_cb
+        self.webserver.on_pedal = self.pedal_cb
+        self.webserver.on_control = self.control_cb
+        
+        self.on_pub_goal = None
+        self.on_pub_goal_inactive = None
+        self.on_pub_cam = None
+        self.on_pub_gripper = None
+        
+        self.on_cmd_vel = None
+        
+        self.on_get_current_eef_pose = None
+        self.on_get_eef_pose = None
+        self.on_reset = None
+        self.on_done = None
+        
+        self.arm_mode = False
+        self.lift_distance = 0.8
+
+        self.Tscam = {
+            "left": np.array([
+                [0, 0, -1, 1.0], 
+                [1, 0, 0, 0.5], 
+                [0, -1, 0, self.lift_distance], 
+                [0, 0, 0, 1], 
+            ]), 
+            "right": np.array([
+                [0, 0, -1, 1.0], 
+                [1, 0, 0, -0.5], 
+                [0, -1, 0, self.lift_distance], 
+                [0, 0, 0, 1], 
+            ]),
+        }
+        
+        self.Tcamgoal_last = { "left": None, "right": None }
+        
+    def reset_Tscam(self, side):
+        if self.Tcamgoal_last[side] is None:
+            raise Exception(f"Connect capture and making sure {side} are in the camera view!")
+        Tsgoal = self.on_get_current_eef_pose(side)
+        Tcamgoal = self.Tcamgoal_last[side]
+        self.Tscam[side] = Tsgoal @ np.linalg.inv(Tcamgoal)
+        logger.info(f"{side} Tscam reset")
+        logger.info(str(self.Tscam[side]))
+
+    async def reset_arm(self):
+        print("reset_arm")
+        try: 
+            self.arm_mode = False
+            
+            goal_pose = {}
+            
+            eef_link_name = "link_lee_teleop"
+            joint_names = ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
+            initial_joint_states = [self.lift_distance, 0.785, -0.785, 0, 0, 0]
+            goal_pose["left"] = self.on_get_eef_pose(eef_link_name, joint_names, initial_joint_states)
+            
+            eef_link_name = "link_ree_teleop"
+            joint_names = ["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ]
+            initial_joint_states = [self.lift_distance, -0.785, 0.785, 0, 0, 0]
+            goal_pose["right"] = self.on_get_eef_pose(eef_link_name, joint_names, initial_joint_states)
+            
+            while True:
+                ok = { "left": False, "right": False }
+                for side in ["left", "right"]:
+                    curr_pose = self.on_get_current_eef_pose(side)
+                    
+                    goal_pose_pq = pt.pq_from_transform(goal_pose[side])
+                    curr_pose_pq = pt.pq_from_transform(curr_pose)
+                    
+                    pos_dist = math.dist(goal_pose_pq[:3], curr_pose_pq[:3])
+                    rot_dist = pr.quaternion_dist(
+                        pr.quaternion_from_extrinsic_euler_xyz(goal_pose_pq[3:6]),
+                        pr.quaternion_from_extrinsic_euler_xyz(curr_pose_pq[3:6])
+                    )
+                
+                    print(f"{side} resetting, pos_dist {pos_dist}m rot_dist {rot_dist}rad, curr_pose {curr_pose}")
+                
+                    if (pos_dist < 0.02 and rot_dist < 0.02):
+                        ok[side] = True
+
+                if ok["left"] and ok["right"]:
+                    break
+                
+                for side in ["left", "right"]:
+                    self.on_pub_goal(side, goal_pose[side])
+                    self.on_pub_gripper(side, GRIPPER_MAX)
+                
+                await asyncio.sleep(0.1)
+            
+            self.reset_Tscam("left")
+            self.reset_Tscam("right")
+            self.arm_mode = True
+            self.on_reset()
+            self.webserver.control_datachannel_log("Reset")
+        except Exception as e:
+            err_msg = f"{type(e).__name__}: {e.args}"
+            self.webserver.control_datachannel_log(err_msg)
+            logger.warn(str(e))
+
+    def hand_cb(self, camera_matrix, distortion_coefficients, corners, ids):
+        Tcamgoal = {}
+
+        Tcamgoal["left"], Tcamgoal["right"] = self.solve(
+            camera_matrix, distortion_coefficients,
+            aruco_corners=corners, aruco_ids=ids,
+            debug=False,
+            debug_image=None,
+        ) # 1ms@1080p
+        
+        for side in ["left", "right"]:
+            # if self.Tcamgoal_last[side] is None:
+            #     self.Tcamgoal_last[side] = Tcamgoal[side]
+
+            # low_pass_coff = 0.1
+            # Tcamgoal[side] = pt.transform_from_pq(pt.pq_slerp(
+            #     pt.pq_from_transform(self.Tcamgoal_last[side]),
+            #     pt.pq_from_transform(Tcamgoal[side]),
+            #     low_pass_coff
+            # ))
+
+            # # trust for sensor read (in this case, opencv on smartphone)
+            # p_low_pass_coff = 0.90
+            # q_low_pass_coff = 0.80
+            # pq_camgoal_last = pt.pq_from_transform(self.Tcamgoal_last[side])
+            # pq_camgoal = pt.pq_from_transform(Tcamgoal[side])
+            # p = pq_camgoal_last[:3] * (1 - p_low_pass_coff) + pq_camgoal[:3] * p_low_pass_coff
+            # q = pr.quaternion_slerp(pq_camgoal_last[3:], pq_camgoal[3:], q_low_pass_coff)
+            # Tcamgoal[side] = pt.transform_from_pq(np.concatenate([p, q]))
+
+            if Tcamgoal[side] is not None:
+                self.Tcamgoal_last[side] = Tcamgoal[side]
+                        
+            Tsgoal = self.Tscam[side] @ self.Tcamgoal_last[side]
+            self.on_pub_cam(side, self.Tscam[side]) # 将摄像头坐标系从base link坐标系 移动+旋转到正确位置
+            self.on_pub_goal_inactive(side, Tsgoal)
+            if self.arm_mode:
+                self.on_pub_goal(side, Tsgoal)
+        
+    def pedal_cb(self, pedal_real_values):
+        pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos"]
+        pedal_names_arm_mode = ["left-gripper", "lift-neg", "lift-pos", "right-gripper"]
+        non_sensetive_area = 0.1
+        cliped_pedal_real_values = np.clip((np.array(pedal_real_values) - 0.5) / (0.5 - non_sensetive_area) * 0.5 + 0.5, 0, 1)
+        if self.arm_mode:
+            values = dict(zip(pedal_names_arm_mode, cliped_pedal_real_values))
+
+            LIFT_VEL_MAX = 0.5
+            lift_vel = (values["lift-pos"] - values["lift-neg"]) * LIFT_VEL_MAX
+
+            TIME_DELTA = 0.1 # TODO Better solution
+            change = lift_vel * TIME_DELTA
+
+            LIFT_DISTANCE_MIN = 0
+            LIFT_DISTANCE_MAX = 1.2
+            if self.lift_distance + change < LIFT_DISTANCE_MIN or self.lift_distance + change > LIFT_DISTANCE_MAX:
+                logger.warn("lift over limit")
+            elif change:
+                self.Tscam["left"][2,3] += change
+                self.Tscam["right"][2,3] += change
+                self.lift_distance += change
+                logger.info("lift_distance changed")
+                logger.info(str(self.lift_distance))
+            
+            left_gripper_pos = (1 - values["left-gripper"]) * GRIPPER_MAX
+            right_gripper_pos = (1 - values["right-gripper"]) * GRIPPER_MAX
+            
+            self.on_pub_gripper("left", left_gripper_pos)
+            self.on_pub_gripper("right", right_gripper_pos)
+        else:
+            values = dict(zip(pedal_names, cliped_pedal_real_values))
+
+            LINEAR_VEL_MAX = 1
+            ANGULAR_VEL_MAX = 1
+            linear_vel = (values["linear-pos"] - values["linear-neg"]) * LINEAR_VEL_MAX
+            angular_vel = (values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX * (-1 if linear_vel < 0 else 1)
+
+            self.on_cmd_vel(linear_vel, angular_vel)
+    
+    async def control_cb(self, control_type):
+        logger.info(control_type)
+        self.webserver.control_datachannel_log(f"Cmd: {control_type}")
+        if control_type == "disable_arm_teleop":
+            self.arm_mode = False
+            self.webserver.control_datachannel_log("Base Teleop Mode")
+        elif control_type == "enable_arm_teleop":
+            self.reset_Tscam("left")
+            self.reset_Tscam("right")
+            self.arm_mode = True
+            self.webserver.control_datachannel_log("Arm Teleop Mode")
+        elif control_type == "reset":
+            await self.reset_arm()
+        elif control_type == "done":
+            self.on_done()
+            self.webserver.control_datachannel_log("Done")

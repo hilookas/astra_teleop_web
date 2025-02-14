@@ -19,8 +19,6 @@ import os
 from typing import Union
 import cv2
 import logging
-from pprint import pprint
-from astra_teleop.process import get_solve
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -71,17 +69,19 @@ def asyncio_run_thread_in_new_loop(coroutine):
 
 class WebServer:
     def __init__(self):
-        self.track_head = None
-        self.track_wrist_left = None
-        self.track_wrist_right = None
+        self.track = {
+            "head": None,
+            "wrist_left": None,
+            "wrist_right": None,
+        }
         
-        self.solve = get_solve(scale=1.0) # scale means to amplify motion
-        self.left_hand_cb = None
-        self.right_hand_cb = None
-        self.pedal_cb = None
-        self.control_cb = None
+        self.datachannel = {
+            "control": None,
+        }
         
-        self.datachannel = None
+        self.on_hand = None
+        self.on_pedal = None
+        self.on_control = None
 
         self.t = threading.Thread(target=asyncio_run_thread_in_new_loop, args=(self.run_server(), ), daemon=True)
         self.t.start()
@@ -142,47 +142,51 @@ class WebServer:
             logger.info("Connection state is %s" % pc.connectionState)
             if pc.connectionState == "failed":
                 await pc.close()
+
                 del self.pc['head']
-                self.datachannel = None
+                self.datachannel["control"] = None
+                self.track["head"] = None
+                self.track["wrist_left"] = None
+                self.track["wrist_right"] = None
             elif pc.connectionState == "closed":
                 del self.pc['head']
-                self.datachannel = None
+                self.datachannel["control"] = None
+                self.track["head"] = None
+                self.track["wrist_left"] = None
+                self.track["wrist_right"] = None
                 
         @pc.on("datachannel")
         def on_datachannel(channel):
-            self.datachannel = channel
             logger.info("channel(%s) - %s" % (channel.label, repr("created by remote party")))
-            if channel.label == "pedal":
-                @channel.on("message")
-                async def on_message(msg):
-                    pedal_real_values = json.loads(msg)
-                    if self.pedal_cb:
-                        self.pedal_cb(pedal_real_values)
-            elif channel.label == "control":
-                @channel.on("message")
-                async def on_message(msg):
-                    control_type = json.loads(msg)
-                    if self.control_cb:
-                        self.control_cb(control_type)
-            elif channel.label == "hand":
+            if channel.label == "hand":
                 @channel.on("message")
                 async def on_message(msg):
                     camera_matrix, distortion_coefficients, corners, ids = json.loads(msg)
-                    self.solve(
-                        camera_matrix, distortion_coefficients, 
-                        corners, ids, 
-                        self.left_hand_cb,
-                        self.right_hand_cb
-                    )
+                    if self.on_hand:
+                        self.on_hand(camera_matrix, distortion_coefficients, corners, ids)
+            elif channel.label == "pedal":
+                @channel.on("message")
+                async def on_message(msg):
+                    pedal_real_values = json.loads(msg)
+                    if self.on_pedal:
+                        self.on_pedal(pedal_real_values)
+            elif channel.label == "control":
+                self.datachannel["control"] = channel
+
+                @channel.on("message")
+                async def on_message(msg):
+                    control_type = json.loads(msg)
+                    if self.on_control:
+                        await self.on_control(control_type)
             else:
                 raise Exception("Unknown label")
 
-        self.track_head = FeedableVideoStreamTrack()
-        pc.addTransceiver(self.track_head, "sendonly") # mid: 0
-        self.track_wrist_left = FeedableVideoStreamTrack()
-        pc.addTransceiver(self.track_wrist_left, "sendonly") # mid: 1
-        self.track_wrist_right = FeedableVideoStreamTrack()
-        pc.addTransceiver(self.track_wrist_right, "sendonly") # mid: 2
+        self.track["head"] = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track["head"], "sendonly") # mid: 0
+        self.track["wrist_left"] = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track["wrist_left"], "sendonly") # mid: 1
+        self.track["wrist_right"] = FeedableVideoStreamTrack()
+        pc.addTransceiver(self.track["wrist_right"], "sendonly") # mid: 2
 
         await pc.setRemoteDescription(offer)
 
@@ -195,6 +199,17 @@ class WebServer:
                 {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
             ),
         )
+    
+    def control_datachannel_log(self, message):
+        if self.datachannel["control"] is not None:
+            self.datachannel["control"].send(json.dumps(message))
+    
+    def track_feed(self, name, image):
+        if self.track[name] is not None:
+            try:
+                self.track[name].feed(image)
+            except:
+                pass
 
 def feed_webserver(webserver, device):
     cam = cv2.VideoCapture(f"/dev/video_{device}", cv2.CAP_V4L2)
@@ -251,18 +266,9 @@ if __name__ == '__main__':
     threading.Thread(target=feed_webserver, args=(webserver, "wrist_left"), daemon=True).start()
     threading.Thread(target=feed_webserver, args=(webserver, "wrist_right"), daemon=True).start()
     
-    def cb(tag2cam):
-        print("left")
-        pprint(tag2cam)
-    webserver.left_hand_cb = cb
-    def cb(tag2cam):
-        print("right")
-        pprint(tag2cam)
-    webserver.right_hand_cb = cb
-    def cb(pedal_real_values):
-        print("pedal")
-        pprint(pedal_real_values)
-    webserver.pedal_cb = cb
+    webserver.on_hand = print
+    webserver.on_pedal = print
+    webserver.on_control = print
     
     while True:
         time.sleep(0.1)
