@@ -69,18 +69,11 @@ class Teleopoperator:
         try: 
             self.arm_mode = False
             
-            goal_pose = {}
-            
-            eef_link_name = "link_lee_teleop"
-            joint_names = ["joint_l1", "joint_l2", "joint_l3", "joint_l4", "joint_l5", "joint_l6" ]
-            initial_joint_states = [self.lift_distance, 0.785, -0.785, 0, 0, 0]
-            goal_pose["left"] = self.on_get_eef_pose(eef_link_name, joint_names, initial_joint_states)
-            
-            eef_link_name = "link_ree_teleop"
-            joint_names = ["joint_r1", "joint_r2", "joint_r3", "joint_r4", "joint_r5", "joint_r6" ]
-            initial_joint_states = [self.lift_distance, -0.785, 0.785, 0, 0, 0]
-            goal_pose["right"] = self.on_get_eef_pose(eef_link_name, joint_names, initial_joint_states)
-            
+            goal_pose = {
+                "left": self.on_get_eef_pose("left", [self.lift_distance, 0.785, -0.785, 0, 0, 0]),
+                "right": self.on_get_eef_pose("right", [self.lift_distance, -0.785, 0.785, 0, 0, 0]),
+            }
+
             while True:
                 ok = { "left": False, "right": False }
                 for side in ["left", "right"]:
