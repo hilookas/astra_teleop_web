@@ -57,60 +57,56 @@ class Teleopoperator:
         
     def reset_Tscam(self, side):
         if self.Tcamgoal_last[side] is None:
+            self.webserver.control_datachannel_log(f"Connect capture and making sure {side} are in the camera view!")
             raise Exception(f"Connect capture and making sure {side} are in the camera view!")
+
         Tsgoal = self.on_get_current_eef_pose(side)
         Tcamgoal = self.Tcamgoal_last[side]
         self.Tscam[side] = Tsgoal @ np.linalg.inv(Tcamgoal)
-        logger.info(f"{side} Tscam reset")
-        logger.info(str(self.Tscam[side]))
+        logger.info(f"Tscam ({side}): \n{str(self.Tscam[side])}")
 
-    async def reset_arm(self):
-        print("reset_arm")
-        try: 
-            self.arm_mode = False
+    async def reset_arm(self):    
+        self.arm_mode = False
+        
+        goal_pose = {
+            "left": self.on_get_eef_pose("left", [self.lift_distance, 0.785, -0.785, 0, 0, 0]),
+            "right": self.on_get_eef_pose("right", [self.lift_distance, -0.785, 0.785, 0, 0, 0]),
+        }
+
+        while True:
+            ok = { "left": False, "right": False }
+            for side in ["left", "right"]:
+                curr_pose = self.on_get_current_eef_pose(side)
+                
+                goal_pose_pq = pt.pq_from_transform(goal_pose[side])
+                curr_pose_pq = pt.pq_from_transform(curr_pose)
+                
+                pos_dist = math.dist(goal_pose_pq[:3], curr_pose_pq[:3])
+                rot_dist = pr.quaternion_dist(
+                    pr.quaternion_from_extrinsic_euler_xyz(goal_pose_pq[3:6]),
+                    pr.quaternion_from_extrinsic_euler_xyz(curr_pose_pq[3:6])
+                )
             
-            goal_pose = {
-                "left": self.on_get_eef_pose("left", [self.lift_distance, 0.785, -0.785, 0, 0, 0]),
-                "right": self.on_get_eef_pose("right", [self.lift_distance, -0.785, 0.785, 0, 0, 0]),
-            }
-
-            while True:
-                ok = { "left": False, "right": False }
-                for side in ["left", "right"]:
-                    curr_pose = self.on_get_current_eef_pose(side)
-                    
-                    goal_pose_pq = pt.pq_from_transform(goal_pose[side])
-                    curr_pose_pq = pt.pq_from_transform(curr_pose)
-                    
-                    pos_dist = math.dist(goal_pose_pq[:3], curr_pose_pq[:3])
-                    rot_dist = pr.quaternion_dist(
-                        pr.quaternion_from_extrinsic_euler_xyz(goal_pose_pq[3:6]),
-                        pr.quaternion_from_extrinsic_euler_xyz(curr_pose_pq[3:6])
-                    )
-                
-                    print(f"{side} resetting, pos_dist {pos_dist}m rot_dist {rot_dist}rad, curr_pose {curr_pose}")
-                
-                    if (pos_dist < 0.02 and rot_dist < 0.02):
-                        ok[side] = True
-
-                if ok["left"] and ok["right"]:
-                    break
-                
-                for side in ["left", "right"]:
-                    self.on_pub_goal(side, goal_pose[side])
-                    self.on_pub_gripper(side, GRIPPER_MAX)
-                
-                await asyncio.sleep(0.1)
+                logger.info(f"Resetting {side}: pos_dist {pos_dist}m, rot_dist {rot_dist}rad, curr_pose: \n{curr_pose}")
             
-            self.reset_Tscam("left")
-            self.reset_Tscam("right")
-            self.arm_mode = True
-            self.on_reset()
-            self.webserver.control_datachannel_log("Reset")
-        except Exception as e:
-            err_msg = f"{type(e).__name__}: {e.args}"
-            self.webserver.control_datachannel_log(err_msg)
-            logger.warn(str(e))
+                if (pos_dist < 0.02 and rot_dist < 0.02):
+                    ok[side] = True
+
+            if ok["left"] and ok["right"]:
+                break
+            
+            for side in ["left", "right"]:
+                self.on_pub_goal(side, goal_pose[side])
+                self.on_pub_gripper(side, GRIPPER_MAX)
+            
+            await asyncio.sleep(0.1)
+        
+        self.reset_Tscam("left")
+        self.reset_Tscam("right")
+        self.arm_mode = True
+        self.on_reset()
+        self.webserver.control_datachannel_log("Reset event")
+        logger.info("Reset event")
 
     def hand_cb(self, camera_matrix, distortion_coefficients, corners, ids):
         Tcamgoal = {}
@@ -144,7 +140,11 @@ class Teleopoperator:
 
             if Tcamgoal[side] is not None:
                 self.Tcamgoal_last[side] = Tcamgoal[side]
-                        
+            
+            if self.Tcamgoal_last[side] is None:
+                self.webserver.control_datachannel_log(f"Connect capture and making sure {side} are in the camera view!")
+                raise Exception(f"Connect capture and making sure {side} are in the camera view!")
+            
             Tsgoal = self.Tscam[side] @ self.Tcamgoal_last[side]
             self.on_pub_cam(side, self.Tscam[side]) # 将摄像头坐标系从base link坐标系 移动+旋转到正确位置
             self.on_pub_goal_inactive(side, Tsgoal)
@@ -168,7 +168,8 @@ class Teleopoperator:
             LIFT_DISTANCE_MIN = 0
             LIFT_DISTANCE_MAX = 1.2
             if self.lift_distance + change < LIFT_DISTANCE_MIN or self.lift_distance + change > LIFT_DISTANCE_MAX:
-                logger.warn("lift over limit")
+                self.webserver.control_datachannel_log("Lift over limit")
+                logger.warn("Lift over limit")
             elif change:
                 self.Tscam["left"][2,3] += change
                 self.Tscam["right"][2,3] += change
@@ -192,18 +193,21 @@ class Teleopoperator:
             self.on_cmd_vel(linear_vel, angular_vel)
     
     async def control_cb(self, control_type):
-        logger.info(control_type)
         self.webserver.control_datachannel_log(f"Cmd: {control_type}")
+        logger.info(f"Cmd: {control_type}")
         if control_type == "disable_arm_teleop":
             self.arm_mode = False
             self.webserver.control_datachannel_log("Base Teleop Mode")
+            logger.info("Base Teleop Mode")
         elif control_type == "enable_arm_teleop":
             self.reset_Tscam("left")
             self.reset_Tscam("right")
             self.arm_mode = True
             self.webserver.control_datachannel_log("Arm Teleop Mode")
+            logger.info("Arm Teleop Mode")
         elif control_type == "reset":
             await self.reset_arm()
         elif control_type == "done":
             self.on_done()
-            self.webserver.control_datachannel_log("Done")
+            self.webserver.control_datachannel_log("Done event")
+            logger.info("Done event")
