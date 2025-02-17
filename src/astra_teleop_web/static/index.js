@@ -760,14 +760,20 @@ window.addEventListener('load', function () {
         // alert(`Combination of ctrlKey + ${keyName}`);
         return;
       } else {
-        if (keyName == 'z') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("disable_arm_teleop") }))
-        } else if (keyName == 'x') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("enable_arm_teleop") }))
-        } else if (keyName == 'r') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("reset") }))
-        } else if (keyName == 'f') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("done") }))
+        if (keyName.toLowerCase() == '`') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_base") }));
+        } else if (keyName.toLowerCase() == '1') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_arm") }));
+        } else if (keyName.toLowerCase() == '2') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_percise") }));
+        } else if (keyName.toLowerCase() == '3') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_more_percise") }));
+        } else if (keyName.toLowerCase() == 'r') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("reset") }));
+        } else if (keyName.toLowerCase() == 'f') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("done") }));
+        } else if (keyName.toLowerCase() == 't') {
+          start();
         }
       }
     },
@@ -775,7 +781,18 @@ window.addEventListener('load', function () {
   );
 
   controlCommTarget.addEventListener('fromServer', async function (evt) {
-    toastr.info("from server: "+ JSON.parse(evt.detail));
+    message = JSON.parse(evt.detail);
+    toastr.info("Server Message: " + message);
+
+    if (message === "Base Move Teleop Mode") {
+      document.getElementById('teleop-mode').innerHTML = 'Base';
+    } else if (message === "Arm Move Teleop Mode") {
+      document.getElementById('teleop-mode').innerHTML = 'Arm';
+    } else if (message === "Percise Arm Move Teleop Mode") {
+      document.getElementById('teleop-mode').innerHTML = 'Percise';
+    } else if (message === "More Percise Arm Move Teleop Mode") {
+      document.getElementById('teleop-mode').innerHTML = 'More Percise';
+    }
   });
 
   toastr.options = {

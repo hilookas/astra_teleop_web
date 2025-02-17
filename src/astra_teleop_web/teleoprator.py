@@ -13,6 +13,7 @@ from astra_teleop_web.webserver import WebServer
 logger = logging.getLogger(__name__)
 
 GRIPPER_MAX = 0.055
+INITIAL_LIFT_DISTANCE = 0.8
 
 class Teleopoperator:
     def __init__(self):
@@ -24,34 +25,35 @@ class Teleopoperator:
         self.webserver.on_control = self.control_cb
         
         self.on_pub_goal = None
-        self.on_pub_goal_inactive = None
-        self.on_pub_cam = None
         self.on_pub_gripper = None
-        
         self.on_cmd_vel = None
         
         self.on_get_current_eef_pose = None
-        self.on_get_eef_pose = None
+        self.on_get_initial_eef_pose = None
         self.on_reset = None
         self.on_done = None
         
         self.arm_mode = False
-        self.lift_distance = 0.8
+        self.percise_mode = False
+        self.lift_distance = INITIAL_LIFT_DISTANCE
+        self.teleop_enabled = True
 
-        self.Tscam = {
-            "left": np.array([
-                [0, 0, -1, 1.0], 
-                [1, 0, 0, 0.5], 
-                [0, -1, 0, self.lift_distance], 
-                [0, 0, 0, 1], 
-            ]), 
-            "right": np.array([
-                [0, 0, -1, 1.0], 
-                [1, 0, 0, -0.5], 
-                [0, -1, 0, self.lift_distance], 
-                [0, 0, 0, 1], 
-            ]),
-        }
+        # self.Tscam = {
+        #     "left": np.array([
+        #         [0, 0, -1, 1.0], 
+        #         [1, 0, 0, 0.5], 
+        #         [0, -1, 0, INITIAL_LIFT_DISTANCE], 
+        #         [0, 0, 0, 1], 
+        #     ]), 
+        #     "right": np.array([
+        #         [0, 0, -1, 1.0], 
+        #         [1, 0, 0, -0.5], 
+        #         [0, -1, 0, INITIAL_LIFT_DISTANCE], 
+        #         [0, 0, 0, 1], 
+        #     ]),
+        # }
+
+        self.Tscam = { "left": None, "right": None, }
         
         self.Tcamgoal_last = { "left": None, "right": None }
         
@@ -69,9 +71,10 @@ class Teleopoperator:
         self.arm_mode = False
         
         goal_pose = {
-            "left": self.on_get_eef_pose("left", [self.lift_distance, 0.785, -0.785, 0, 0, 0]),
-            "right": self.on_get_eef_pose("right", [self.lift_distance, -0.785, 0.785, 0, 0, 0]),
+            "left": self.on_get_initial_eef_pose("left"),
+            "right": self.on_get_initial_eef_pose("right"),
         }
+        self.lift_distance = INITIAL_LIFT_DISTANCE
 
         while True:
             ok = { "left": False, "right": False }
@@ -96,14 +99,13 @@ class Teleopoperator:
                 break
             
             for side in ["left", "right"]:
-                self.on_pub_goal(side, goal_pose[side])
-                self.on_pub_gripper(side, GRIPPER_MAX)
+                if self.teleop_enabled:
+                    self.on_pub_goal(side, goal_pose[side])
+                    self.on_pub_gripper(side, GRIPPER_MAX)
             
             await asyncio.sleep(0.1)
         
-        self.reset_Tscam("left")
-        self.reset_Tscam("right")
-        self.arm_mode = True
+        await self.teleop_mode_arm(percise_mode=True)
         self.on_reset()
         self.webserver.control_datachannel_log("Reset event")
         logger.info("Reset event")
@@ -119,37 +121,44 @@ class Teleopoperator:
         ) # 1ms@1080p
         
         for side in ["left", "right"]:
-            # if self.Tcamgoal_last[side] is None:
-            #     self.Tcamgoal_last[side] = Tcamgoal[side]
-
-            # low_pass_coff = 0.1
-            # Tcamgoal[side] = pt.transform_from_pq(pt.pq_slerp(
-            #     pt.pq_from_transform(self.Tcamgoal_last[side]),
-            #     pt.pq_from_transform(Tcamgoal[side]),
-            #     low_pass_coff
-            # ))
-
-            # # trust for sensor read (in this case, opencv on smartphone)
-            # p_low_pass_coff = 0.90
-            # q_low_pass_coff = 0.80
-            # pq_camgoal_last = pt.pq_from_transform(self.Tcamgoal_last[side])
-            # pq_camgoal = pt.pq_from_transform(Tcamgoal[side])
-            # p = pq_camgoal_last[:3] * (1 - p_low_pass_coff) + pq_camgoal[:3] * p_low_pass_coff
-            # q = pr.quaternion_slerp(pq_camgoal_last[3:], pq_camgoal[3:], q_low_pass_coff)
-            # Tcamgoal[side] = pt.transform_from_pq(np.concatenate([p, q]))
-
             if Tcamgoal[side] is not None:
+                if self.Tcamgoal_last[side] is None:
+                    self.Tcamgoal_last[side] = Tcamgoal[side]
+
+                if self.percise_mode:
+                    # low_pass_coff = 0.1
+                    # Tcamgoal[side] = pt.transform_from_pq(pt.pq_slerp(
+                    #     pt.pq_from_transform(self.Tcamgoal_last[side]),
+                    #     pt.pq_from_transform(Tcamgoal[side]),
+                    #     low_pass_coff
+                    # ))
+
+                    # trust for sensor read (in this case, opencv on web client)
+                    p_low_pass_coff = 0.1
+                    q_low_pass_coff = 0.1
+                    pq_camgoal_last = pt.pq_from_transform(self.Tcamgoal_last[side])
+                    pq_camgoal = pt.pq_from_transform(Tcamgoal[side])
+                    p = pq_camgoal_last[:3] * (1 - p_low_pass_coff) + pq_camgoal[:3] * p_low_pass_coff
+                    q = pr.quaternion_slerp(pq_camgoal_last[3:], pq_camgoal[3:], q_low_pass_coff, shortest_path=True)
+                    Tcamgoal[side] = pt.transform_from_pq(np.concatenate([p, q]))
+
                 self.Tcamgoal_last[side] = Tcamgoal[side]
+
+        if self.teleop_enabled:
+            for side in ["left", "right"]:
+                if self.Tcamgoal_last[side] is None:
+                    self.webserver.control_datachannel_log(f"Connect capture and making sure {side} are in the camera view!")
+                    raise Exception(f"Connect capture and making sure {side} are in the camera view!")
+
+            for side in ["left", "right"]:
+                if self.Tscam[side] is None:
+                    # self.webserver.control_datachannel_log(f"Reset {side} arm first!")
+                    # raise Exception(f"Reset {side} arm first!")
+                    return
             
-            if self.Tcamgoal_last[side] is None:
-                self.webserver.control_datachannel_log(f"Connect capture and making sure {side} are in the camera view!")
-                raise Exception(f"Connect capture and making sure {side} are in the camera view!")
-            
-            Tsgoal = self.Tscam[side] @ self.Tcamgoal_last[side]
-            self.on_pub_cam(side, self.Tscam[side]) # 将摄像头坐标系从base link坐标系 移动+旋转到正确位置
-            self.on_pub_goal_inactive(side, Tsgoal)
-            if self.arm_mode:
-                self.on_pub_goal(side, Tsgoal)
+            for side in ["left", "right"]:
+                Tsgoal = self.Tscam[side] @ self.Tcamgoal_last[side]
+                self.on_pub_goal(side, Tsgoal if self.arm_mode else None, Tscam=self.Tscam[side], Tsgoal_inactive=Tsgoal)
         
     def pedal_cb(self, pedal_real_values):
         pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos"]
@@ -180,8 +189,9 @@ class Teleopoperator:
             left_gripper_pos = (1 - values["left-gripper"]) * GRIPPER_MAX
             right_gripper_pos = (1 - values["right-gripper"]) * GRIPPER_MAX
             
-            self.on_pub_gripper("left", left_gripper_pos)
-            self.on_pub_gripper("right", right_gripper_pos)
+            if self.teleop_enabled:
+                self.on_pub_gripper("left", left_gripper_pos)
+                self.on_pub_gripper("right", right_gripper_pos)
         else:
             values = dict(zip(pedal_names, cliped_pedal_real_values))
 
@@ -190,24 +200,49 @@ class Teleopoperator:
             linear_vel = (values["linear-pos"] - values["linear-neg"]) * LINEAR_VEL_MAX
             angular_vel = (values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX * (-1 if linear_vel < 0 else 1)
 
-            self.on_cmd_vel(linear_vel, angular_vel)
+            if self.teleop_enabled:
+                self.on_cmd_vel(linear_vel, angular_vel)
+                
+    async def teleop_mode_arm(self, percise_mode=None):
+        if percise_mode is None:
+            percise_mode = self.percise_mode
+        self.solve = get_solve(scale=0.5 if percise_mode == "percise_mode" else 1.0)
+        self.Tscam = { "left": None, "right": None, }
+        self.Tcamgoal_last = { "left": None, "right": None }
+        while True: # wait for new tag result
+            if self.Tcamgoal_last["left"] is not None and self.Tcamgoal_last["right"] is not None:
+                break
+            await asyncio.sleep(0.1)
+        self.reset_Tscam("left")
+        self.reset_Tscam("right")
+        self.percise_mode = percise_mode
+        self.arm_mode = True
+        if percise_mode == "more_percise":
+            self.webserver.control_datachannel_log("More Percise Arm Move Teleop Mode")
+            logger.info("More Percise Arm Move Teleop Mode")
+        elif percise_mode:
+            self.webserver.control_datachannel_log("Percise Arm Move Teleop Mode")
+            logger.info("Percise Arm Move Teleop Mode")
+        else:
+            self.webserver.control_datachannel_log("Arm Move Teleop Mode")
+            logger.info("Arm Move Teleop Mode")
     
     async def control_cb(self, control_type):
         self.webserver.control_datachannel_log(f"Cmd: {control_type}")
         logger.info(f"Cmd: {control_type}")
-        if control_type == "disable_arm_teleop":
-            self.arm_mode = False
-            self.webserver.control_datachannel_log("Base Teleop Mode")
-            logger.info("Base Teleop Mode")
-        elif control_type == "enable_arm_teleop":
-            self.reset_Tscam("left")
-            self.reset_Tscam("right")
-            self.arm_mode = True
-            self.webserver.control_datachannel_log("Arm Teleop Mode")
-            logger.info("Arm Teleop Mode")
-        elif control_type == "reset":
+        if control_type == "reset":
             await self.reset_arm()
         elif control_type == "done":
             self.on_done()
             self.webserver.control_datachannel_log("Done event")
             logger.info("Done event")
+        elif control_type == "teleop_mode_base":
+            self.arm_mode = False
+            self.webserver.control_datachannel_log("Base Move Teleop Mode")
+            logger.info("Base Move Teleop Mode")
+        elif control_type == "teleop_mode_arm":
+            await self.teleop_mode_arm(percise_mode=False)
+        elif control_type == "teleop_mode_percise":
+            await self.teleop_mode_arm(percise_mode=True)
+        elif control_type == "teleop_mode_more_percise":
+            await self.teleop_mode_arm(percise_mode="more_percise")
