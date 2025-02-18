@@ -87,6 +87,7 @@ class WebServer:
         self.t.start()
 
     async def run_server(self):
+        self.loop = asyncio.get_running_loop()
         self.app = aiohttp.web.Application()
 
         self.pc: dict[str, aiortc.RTCPeerConnection] = {}
@@ -156,7 +157,7 @@ class WebServer:
                 self.track["wrist_right"] = None
                 
         @pc.on("datachannel")
-        def on_datachannel(channel):
+        def on_datachannel(channel: aiortc.RTCDataChannel):
             logger.info("channel(%s) - %s" % (channel.label, repr("created by remote party")))
             if channel.label == "hand":
                 @channel.on("message")

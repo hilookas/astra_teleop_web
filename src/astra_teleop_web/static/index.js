@@ -798,7 +798,8 @@ window.addEventListener('load', function () {
   toastr.options = {
     "progressBar": true,
     "positionClass": "toast-bottom-left",
+    // "preventDuplicates": true,
   };
 
-  toastr.success("Click the start stream button.");
+  toastr.success("Click the start stream button, or press `t` to start stream.");
 })

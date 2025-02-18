@@ -246,3 +246,7 @@ class Teleopoperator:
             await self.teleop_mode_arm(percise_mode=True)
         elif control_type == "teleop_mode_more_percise":
             await self.teleop_mode_arm(percise_mode="more_percise")
+            
+    def ik_failed_cb(self, side):
+        self.webserver.loop.call_soon_threadsafe(self.webserver.control_datachannel_log, f"IK failed: {side}")
+        logger.info(f"IK failed: {side}")
