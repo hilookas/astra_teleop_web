@@ -27,32 +27,28 @@ logging.basicConfig(level=logging.INFO)
 class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
     kind = 'video'
 
-    def __init__(self, VIDEO_PTIME=1/40, VIDEO_CLOCK_RATE=90000):
+    def __init__(self):
         super().__init__()
-        self.VIDEO_PTIME = VIDEO_PTIME
-        self.VIDEO_CLOCK_RATE = VIDEO_CLOCK_RATE
+        self.VIDEO_CLOCK_RATE = 90000
         self.q = queue.LifoQueue(maxsize=1)
+        self.last_time = time.time()
 
     async def recv(self) -> Union[av.frame.Frame, av.packet.Packet]:
         if self.readyState != "live":
             raise aiortc.mediastreams.MediaStreamError
         
-        image = await asyncio.get_running_loop().run_in_executor(None, self.q.get)
+        image_with_timestamp = await asyncio.get_running_loop().run_in_executor(None, self.q.get)
+        image, timestamp_sec, timestamp_nsec = image_with_timestamp
         frame = av.video.VideoFrame.from_ndarray(image) # shape: (height, width, channel) dtype: np.uint8 [0,255]
 
-        if hasattr(self, "_timestamp"):
-            self._timestamp += int(self.VIDEO_PTIME * self.VIDEO_CLOCK_RATE)
-        else:
-            self._timestamp = 0
-
-        frame.pts = self._timestamp
+        frame.pts = int((timestamp_sec + timestamp_nsec / 1000000000) * self.VIDEO_CLOCK_RATE)
         frame.time_base = fractions.Fraction(1, self.VIDEO_CLOCK_RATE)
 
         return frame
     
-    def feed(self, image: np.ndarray):
+    def feed(self, image_with_timestamp):
         try:
-            self.q.put_nowait(image)
+            self.q.put_nowait(image_with_timestamp)
         except queue.Full:
             try:
                 self.q.get_nowait()
@@ -60,7 +56,7 @@ class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
             except queue.Empty:
                 logger.debug('times fly!')
                 pass
-            self.q.put_nowait(image) # Should not throw any error
+            self.q.put_nowait(image_with_timestamp) # Should not throw any error
 
 def asyncio_run_thread_in_new_loop(coroutine):
     loop = asyncio.new_event_loop()
@@ -205,10 +201,10 @@ class WebServer:
         if self.datachannel["control"] is not None:
             self.datachannel["control"].send(json.dumps(message))
     
-    def track_feed(self, name, image):
+    def track_feed(self, name, image_with_timestamp):
         if self.track[name] is not None:
             try:
-                self.track[name].feed(image)
+                self.track[name].feed(image_with_timestamp)
             except:
                 pass
 
@@ -235,7 +231,8 @@ def feed_webserver(webserver, device):
         image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
         assert image.shape[0] == 360 and image.shape[1] == 640
         try:
-            getattr(webserver, f"track_{device}").feed(image)
+            t = time.time_ns()
+            getattr(webserver, f"track_{device}").feed((image, int(t / 1000000000), int(t % 1000000000)))
         except:
             pass
 
@@ -256,7 +253,8 @@ def feed_webserver_av(webserver, device):
         image = frame.to_rgb().to_ndarray()
         assert image.shape[0] == 360 and image.shape[1] == 640
         try:
-            getattr(webserver, f"track_{device}").feed(image)
+            t = time.time_ns()
+            getattr(webserver, f"track_{device}").feed((image, int(t / 1000000000), int(t % 1000000000)))
         except:
             pass
 
