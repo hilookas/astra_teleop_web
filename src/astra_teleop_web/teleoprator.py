@@ -86,8 +86,8 @@ class Teleopoperator:
                 
                 pos_dist = math.dist(goal_pose_pq[:3], curr_pose_pq[:3])
                 rot_dist = pr.quaternion_dist(
-                    pr.quaternion_from_extrinsic_euler_xyz(goal_pose_pq[3:6]),
-                    pr.quaternion_from_extrinsic_euler_xyz(curr_pose_pq[3:6])
+                    goal_pose_pq[3:],
+                    curr_pose_pq[3:]
                 )
             
                 logger.info(f"Resetting {side}: pos_dist {pos_dist}m, rot_dist {rot_dist}rad, curr_pose: \n{curr_pose}")
@@ -99,9 +99,8 @@ class Teleopoperator:
                 break
             
             for side in ["left", "right"]:
-                if self.teleop_enabled:
-                    self.on_pub_goal(side, goal_pose[side])
-                    self.on_pub_gripper(side, GRIPPER_MAX)
+                self.on_pub_goal(side, goal_pose[side])
+                self.on_pub_gripper(side, GRIPPER_MAX)
             
             await asyncio.sleep(0.1)
         
