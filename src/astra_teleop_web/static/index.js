@@ -760,14 +760,18 @@ window.addEventListener('load', function () {
         // alert(`Combination of ctrlKey + ${keyName}`);
         return;
       } else {
-        if (keyName.toLowerCase() == '`') {
+        if (keyName.toLowerCase() == '0') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_none") }));
+        } else if (keyName.toLowerCase() == '`') {
           controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_base") }));
         } else if (keyName.toLowerCase() == '1') {
           controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_arm") }));
         } else if (keyName.toLowerCase() == '2') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_percise") }));
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("percise_mode_false") }));
         } else if (keyName.toLowerCase() == '3') {
-          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_more_percise") }));
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("percise_mode_true") }));
+        } else if (keyName.toLowerCase() == '4') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("percise_mode_more_percise") }));
         } else if (keyName.toLowerCase() == 'r') {
           controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("reset") }));
         } else if (keyName.toLowerCase() == 'f') {
@@ -784,13 +788,15 @@ window.addEventListener('load', function () {
     message = JSON.parse(evt.detail);
     toastr.info("Server Message: " + message);
 
-    if (message === "Base Move Teleop Mode") {
+    if (message === "Teleop Mode: None") {
+      document.getElementById('teleop-mode').innerHTML = 'None';
+    } else if (message === "Teleop Mode: Base Move") {
       document.getElementById('teleop-mode').innerHTML = 'Base';
-    } else if (message === "Arm Move Teleop Mode") {
+    } else if (message === "Teleop Mode: Arm Move") {
       document.getElementById('teleop-mode').innerHTML = 'Arm';
-    } else if (message === "Percise Arm Move Teleop Mode") {
+    } else if (message === "Teleop Mode: Percise Arm Move") {
       document.getElementById('teleop-mode').innerHTML = 'Percise';
-    } else if (message === "More Percise Arm Move Teleop Mode") {
+    } else if (message === "Teleop Mode: More Percise Arm Move") {
       document.getElementById('teleop-mode').innerHTML = 'More Percise';
     }
   });

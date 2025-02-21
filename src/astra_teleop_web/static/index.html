@@ -21,10 +21,6 @@
     </div>
     <div class="mx-auto p-6 bg-white border-y sm:border-x border-gray-200 sm:rounded-lg shadow col-span-2 w-full">
         <div>
-            <button id="start" onclick="start()" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 border border-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed mb-3">
-                Start Stream
-            </button>
-
             <button id="capture" onclick="capture()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed mb-3">
                 Start Capture
             </button>
@@ -40,6 +36,10 @@
             <button id="calibrate-pedal" onclick="calibratePedal()" class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded disabled:opacity-50 disabled:cursor-not-allowed mb-3">
                 Calibrate Pedal
             </button>
+
+            <button id="start" onclick="start()" class="bg-blue-500 hover:bg-blue-700 text-white font-semibold py-2 px-4 border border-blue-500 rounded disabled:opacity-50 disabled:cursor-not-allowed mb-3">
+                Start Stream
+            </button>
         </div>
         <div id="player" class="hidden">
             <audio id="audio"></audio>
@@ -51,7 +51,7 @@
             Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms | Teleop Mode: <span id="teleop-mode">Unknown</span>
         </p>
         <p class="mt-3 font-normal text-gray-700">
-            Shortcuts: [`] for base move mode, [1] for arm move mode, [2] for percise arm move mode, [r] for reset env, [f] for send done signal, [t] for start stream
+            Shortcuts: [0] for disable teleop, [`] for base mode, [1] for arm mode, [r] for reset robot, [f] for send done signal, [t] for start stream
         </p>
     </div>
     <div class="mx-auto p-6 bg-white border-y sm:border-x border-gray-200 sm:rounded-lg shadow w-full">

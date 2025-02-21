@@ -38,6 +38,7 @@ class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
             raise aiortc.mediastreams.MediaStreamError
         
         image_with_timestamp = await asyncio.get_running_loop().run_in_executor(None, self.q.get)
+        self.q.task_done()
         image, timestamp_sec, timestamp_nsec = image_with_timestamp
         frame = av.video.VideoFrame.from_ndarray(image) # shape: (height, width, channel) dtype: np.uint8 [0,255]
 
@@ -52,6 +53,7 @@ class FeedableVideoStreamTrack(aiortc.mediastreams.MediaStreamTrack):
         except queue.Full:
             try:
                 self.q.get_nowait()
+                self.q.task_done()
                 logger.debug('lost one image')
             except queue.Empty:
                 logger.debug('times fly!')
