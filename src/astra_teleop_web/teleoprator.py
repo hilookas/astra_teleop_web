@@ -1,5 +1,4 @@
 import asyncio
-import threading
 import logging
 
 import numpy as np
@@ -15,6 +14,8 @@ logger = logging.getLogger(__name__)
 GRIPPER_MAX = 0.055
 INITIAL_LIFT_DISTANCE = 0.8
 
+WALKING_HEAD_TILT = 0.26
+
 class Teleopoperator:
     def __init__(self):
         self.solve = get_solve(scale=1.0) # scale means to amplify motion
@@ -26,6 +27,7 @@ class Teleopoperator:
         
         self.on_pub_goal = None
         self.on_pub_gripper = None
+        self.on_pub_head = None
         self.on_cmd_vel = None
         
         self.on_get_current_eef_pose = None
@@ -92,7 +94,7 @@ class Teleopoperator:
             
                 logger.info(f"Resetting {side}: pos_dist {pos_dist}m, rot_dist {rot_dist}rad, curr_pose: \n{curr_pose}")
             
-                if (pos_dist < 0.02 and rot_dist < 0.02):
+                if (pos_dist < 0.02 and rot_dist < 0.03):
                     ok[side] = True
 
             if ok["left"] and ok["right"]:
@@ -102,12 +104,22 @@ class Teleopoperator:
                 self.on_pub_goal(side, goal_pose[side])
                 self.on_pub_gripper(side, GRIPPER_MAX)
             
+            self.on_pub_head(0, self.get_head_tilt(self.lift_distance))
+            
             await asyncio.sleep(0.1)
         
         await self.teleop_mode_arm(percise_mode=True)
         self.on_reset()
         self.webserver.control_datachannel_log("Reset event")
         logger.info("Reset event")
+    
+    def get_head_tilt(self, lift_distance):
+        point0_lift = 0
+        point0_tilt = 1.36
+        point1_lift = 0.8
+        point1_tilt = 1.06
+        
+        return point0_tilt + (point1_tilt - point0_tilt) * (lift_distance - point0_lift) / (point1_lift - point0_lift)
 
     def hand_cb(self, camera_matrix, distortion_coefficients, corners, ids):
         Tcamgoal = {}
@@ -158,6 +170,8 @@ class Teleopoperator:
             for side in ["left", "right"]:
                 Tsgoal = self.Tscam[side] @ self.Tcamgoal_last[side]
                 self.on_pub_goal(side, Tsgoal if self.arm_mode else None, Tscam=self.Tscam[side], Tsgoal_inactive=Tsgoal)
+            
+            self.on_pub_head(0, self.get_head_tilt(self.lift_distance))
         
     def pedal_cb(self, pedal_real_values):
         pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos"]
@@ -201,6 +215,7 @@ class Teleopoperator:
 
             if self.teleop_enabled:
                 self.on_cmd_vel(linear_vel, angular_vel)
+                self.on_pub_head(0, WALKING_HEAD_TILT)
                 
     async def teleop_mode_arm(self, percise_mode=None):
         if percise_mode is None:
