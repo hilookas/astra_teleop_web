@@ -176,7 +176,7 @@ class WebServer:
                 async def on_message(msg):
                     control_type = json.loads(msg)
                     if self.on_control:
-                        await self.on_control(control_type)
+                        asyncio.create_task(self.on_control(control_type))
             else:
                 raise Exception("Unknown label")
 

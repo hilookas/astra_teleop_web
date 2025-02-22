@@ -766,6 +766,10 @@ window.addEventListener('load', function () {
           controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_base") }));
         } else if (keyName.toLowerCase() == '1') {
           controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_arm") }));
+        }else if (keyName.toLowerCase() == '~') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_base_with_reset") }));
+        } else if (keyName.toLowerCase() == '!') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("teleop_mode_arm_with_reset") }));
         } else if (keyName.toLowerCase() == '2') {
           controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("percise_mode_false") }));
         } else if (keyName.toLowerCase() == '3') {
@@ -778,6 +782,10 @@ window.addEventListener('load', function () {
           controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("done") }));
         } else if (keyName.toLowerCase() == 't') {
           start();
+        } else if (keyName.toLowerCase() == 'z') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("gripper_lock_left") }));
+        } else if (keyName.toLowerCase() == 'x') {
+          controlCommTarget.dispatchEvent(new CustomEvent("toServer", { detail: JSON.stringify("gripper_lock_right") }));
         }
       }
     },

@@ -35,12 +35,17 @@ class Teleopoperator:
         
         self.teleop_mode = None
         
-        self.percise_mode = False
+        self.percise_mode = True
         self.solve = get_solve(scale=1.0)
         
         self.lift_distance = INITIAL_LIFT_DISTANCE
         self.Tscam = { "left": None, "right": None, }
         self.Tcamgoal_last = { "left": None, "right": None }
+        
+        self.gripper_lock = { "left": False, "right": False }
+        self.last_gripper_pos = { "left": GRIPPER_MAX, "right": GRIPPER_MAX }
+        
+        self.far_seeing = False
         
     async def reset_Tscam(self):
         self.Tscam = { "left": None, "right": None, }
@@ -89,6 +94,7 @@ class Teleopoperator:
             logger.info("Teleop Mode: None")
 
     async def reset_arm(self, lift_distance=INITIAL_LIFT_DISTANCE, joint_bent=math.pi/4, far_seeing=False):  
+        self.far_seeing = far_seeing
         self.lift_distance = lift_distance
         goal_pose = {
             "left": self.on_get_initial_eef_pose("left", [self.lift_distance, joint_bent, -joint_bent, 0, 0, 0]),
@@ -117,9 +123,9 @@ class Teleopoperator:
             
             for side in ["left", "right"]:
                 self.on_pub_goal(side, goal_pose[side])
-                self.on_pub_gripper(side, GRIPPER_MAX)
+                self.on_pub_gripper(side, self.last_gripper_pos[side])
             
-            if far_seeing:
+            if self.far_seeing:
                 self.on_pub_head(0, FAR_SEEING_HEAD_TILT)
             else:
                 self.on_pub_head(0, self.get_head_tilt(self.lift_distance))
@@ -168,7 +174,7 @@ class Teleopoperator:
 
                 self.Tcamgoal_last[side] = Tcamgoal[side]
 
-        if self.teleop_mode == "arm":
+        if self.teleop_mode is not None:
             for side in ["left", "right"]:
                 if self.Tcamgoal_last[side] is None:
                     self.webserver.control_datachannel_log(f"Connect capture and making sure {side} are in the camera view!")
@@ -181,9 +187,12 @@ class Teleopoperator:
             
             for side in ["left", "right"]:
                 Tsgoal = self.Tscam[side] @ self.Tcamgoal_last[side]
-                self.on_pub_goal(side, Tsgoal if self.teleop_mode == "arm" else None, Tscam=self.Tscam[side], Tsgoal_inactive=Tsgoal)
+                self.on_pub_goal(side, Tsgoal, Tscam=self.Tscam[side], Tsgoal_inactive=Tsgoal)
         
-            self.on_pub_head(0, self.get_head_tilt(self.lift_distance))
+            if self.far_seeing:
+                self.on_pub_head(0, FAR_SEEING_HEAD_TILT)
+            else:
+                self.on_pub_head(0, self.get_head_tilt(self.lift_distance))
         
     def pedal_cb(self, pedal_real_values):
         pedal_names = ["angular-pos", "angular-neg", "linear-neg", "linear-pos"]
@@ -214,8 +223,32 @@ class Teleopoperator:
             left_gripper_pos = (1 - values["left-gripper"]) * GRIPPER_MAX
             right_gripper_pos = (1 - values["right-gripper"]) * GRIPPER_MAX
             
-            self.on_pub_gripper("left", left_gripper_pos)
-            self.on_pub_gripper("right", right_gripper_pos)
+            # Unlock gripper lock
+            if self.gripper_lock["left"] == True and left_gripper_pos > GRIPPER_MAX * 0.9:
+                self.gripper_lock["left"] = 'ready_to_unlock'
+                logger.info("Left gripper ready to unlock")
+                self.webserver.control_datachannel_log("Left gripper ready to unlock")
+            if self.gripper_lock["left"] == 'ready_to_unlock' and left_gripper_pos <= self.last_gripper_pos["left"]:
+                self.gripper_lock["left"] = False
+                logger.info("Left gripper unlocked")
+                self.webserver.control_datachannel_log("Left gripper unlocked")
+            if self.gripper_lock["right"] == True and right_gripper_pos > GRIPPER_MAX * 0.9:
+                self.gripper_lock["right"] = 'ready_to_unlock'
+                logger.info("Right gripper ready to unlock")
+                self.webserver.control_datachannel_log("Right gripper ready to unlock")
+            if self.gripper_lock["right"] == 'ready_to_unlock' and right_gripper_pos <= self.last_gripper_pos["right"]:
+                self.gripper_lock["right"] = False
+                logger.info("Right gripper unlocked")
+                self.webserver.control_datachannel_log("Right gripper unlocked")
+
+            # Update last gripper pos if not locked
+            if self.gripper_lock["left"] == False:
+                self.last_gripper_pos["left"] = left_gripper_pos
+            if self.gripper_lock["right"] == False:
+                self.last_gripper_pos["right"] = right_gripper_pos
+            
+            self.on_pub_gripper("left", self.last_gripper_pos["left"])
+            self.on_pub_gripper("right", self.last_gripper_pos["right"])
         elif self.teleop_mode == "base":
             values = dict(zip(pedal_names, cliped_pedal_real_values))
 
@@ -225,16 +258,17 @@ class Teleopoperator:
             angular_vel = (values["angular-pos"] - values["angular-neg"]) * ANGULAR_VEL_MAX * (-1 if linear_vel < 0 else 1)
 
             self.on_cmd_vel(linear_vel, angular_vel)
-            self.on_pub_head(0, FAR_SEEING_HEAD_TILT)
     
     async def control_cb(self, control_type):
         self.webserver.control_datachannel_log(f"Cmd: {control_type}")
         logger.info(f"Cmd: {control_type}")
         if control_type == "reset":
             self.update_teleop_mode(None)
+            self.last_gripper_pos = { "left": GRIPPER_MAX, "right": GRIPPER_MAX }
             await self.reset_arm(INITIAL_LIFT_DISTANCE, math.pi/4, far_seeing=False)
             self.on_reset()
             self.webserver.control_datachannel_log("Reset event")
+            logger.info("Reset event")
         elif control_type == "done":
             self.on_done()
             self.webserver.control_datachannel_log("Done event")
@@ -243,26 +277,39 @@ class Teleopoperator:
             self.update_teleop_mode(None)
         elif control_type == "teleop_mode_base":
             self.update_teleop_mode(None)
-            await self.reset_arm(self.lift_distance, math.pi/2*0.9, far_seeing=True)
+            await self.update_percise_mode(percise_mode=True)
             self.update_teleop_mode("base")
         elif control_type == "teleop_mode_arm":
+            self.update_teleop_mode(None)
+            await self.update_percise_mode(percise_mode=True)
+            self.update_teleop_mode("arm")
+        elif control_type == "teleop_mode_base_with_reset":
+            self.update_teleop_mode(None)
+            await self.reset_arm(self.lift_distance, math.pi/2*0.9, far_seeing=True)
+            await self.update_percise_mode(percise_mode=True)
+            self.update_teleop_mode("base")
+        elif control_type == "teleop_mode_arm_with_reset":
             self.update_teleop_mode(None)            
             await self.reset_arm(self.lift_distance, math.pi/4, far_seeing=False)
             await self.update_percise_mode(percise_mode=True)
             self.update_teleop_mode("arm")
         elif control_type == "percise_mode_false":
-            self.update_teleop_mode(None)
             await self.update_percise_mode(percise_mode=False)
             self.update_teleop_mode("arm")
         elif control_type == "percise_mode_true":
-            self.update_teleop_mode(None)
             await self.update_percise_mode(percise_mode=True)
             self.update_teleop_mode("arm")
         elif control_type == "percise_mode_more_percise":
-            self.update_teleop_mode(None)
             await self.update_percise_mode(percise_mode="more_percise")
             self.update_teleop_mode("arm")
+        elif control_type == "gripper_lock_left":
+            self.gripper_lock["left"] = True
+            logger.info("Left gripper locked, release your pedal to unlock")
+            self.webserver.control_datachannel_log("Left gripper locked, release your pedal to unlock")
+        elif control_type == "gripper_lock_right":
+            self.gripper_lock["right"] = True
+            logger.info("Right gripper locked, release your pedal to unlock")
+            self.webserver.control_datachannel_log("Right gripper locked, release your pedal to unlock")
             
-    def ik_failed_cb(self, side):
-        self.webserver.loop.call_soon_threadsafe(self.webserver.control_datachannel_log, f"IK failed: {side}")
-        logger.info(f"IK failed: {side}")
+    def error_cb(self, msg):
+        self.webserver.loop.call_soon_threadsafe(self.webserver.control_datachannel_log, msg)
