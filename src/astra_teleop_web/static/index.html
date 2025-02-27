@@ -48,7 +48,11 @@
             --><video id="video-wrist-right" playsinline="true" muted="true" style="object-fit: initial; width: 50%;" class="inline-block"></video>
         </div>
         <p class="mt-3 font-normal text-gray-700">
-            Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms | Teleop Mode: <span id="teleop-mode">Unknown</span>
+            <div class="flex justify-stretch w-full">
+                <div class="w-full">Left Gripper: <span id="gripper-lock-left">Unknown</span></div>
+                <div class="w-full text-center"><span id="teleop-mode" class="font-bold">Unknown</span> Mode</div>
+                <div class="w-full text-right">Right Gripper: <span id="gripper-lock-right">Unknown</span></div>
+            </div>
         </p>
         <p class="mt-3 font-normal text-gray-700">
             Shortcuts: [0] for disable teleop, [`] for base mode, [1] for arm mode, [Shift+`] for base mode with reset, [Shift+1] for arm mode with reset, [r] for reset robot, [f] for send done signal, [t] for start stream
@@ -58,7 +62,7 @@
         <div>
             <h6 class="mb-2 text-2xl font-bold tracking-tight text-gray-900">Capture Playback</h6>
             <p class="mt-3 font-normal text-gray-700">
-                ArUco Timing: <span id="aruco-timing">INF</span>ms
+                ArUco Timing: <span id="aruco-timing">INF</span>ms | Network: <span id="pc-status">idle</span> <span id="pc-ping">INF</span>ms
             </p>
             <canvas id="canvas-imshow" class="mt-3 w-full"></canvas>
             <p class="mt-3 font-normal text-gray-700">

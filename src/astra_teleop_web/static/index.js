@@ -798,22 +798,52 @@ window.addEventListener('load', function () {
 
     if (message === "Teleop Mode: None") {
       document.getElementById('teleop-mode').innerHTML = 'None';
-    } else if (message === "Teleop Mode: Base Move") {
+      document.getElementById('teleop-mode').style.color = 'black';
+    } else if (message === "Teleop Mode: Base") {
       document.getElementById('teleop-mode').innerHTML = 'Base';
-    } else if (message === "Teleop Mode: Arm Move") {
+      document.getElementById('teleop-mode').style.color = 'red';
+    } else if (message === "Teleop Mode: Arm") {
       document.getElementById('teleop-mode').innerHTML = 'Arm';
-    } else if (message === "Teleop Mode: Percise Arm Move") {
-      document.getElementById('teleop-mode').innerHTML = 'Percise';
-    } else if (message === "Teleop Mode: More Percise Arm Move") {
-      document.getElementById('teleop-mode').innerHTML = 'More Percise';
+      document.getElementById('teleop-mode').style.color = 'blue';
+    } else if (message === "Teleop Mode: Arm (Percise)") {
+      document.getElementById('teleop-mode').innerHTML = 'Arm (Percise)';
+      document.getElementById('teleop-mode').style.color = 'blue';
+    } else if (message === "Teleop Mode: Arm (More Percise)") {
+      document.getElementById('teleop-mode').innerHTML = 'Arm (More Percise)';
+      document.getElementById('teleop-mode').style.color = 'blue';
+    } else if (message === "Left Gripper Lock: Locked (Ready to Unlock)") {
+      document.getElementById('gripper-lock-left').innerHTML = 'Locked (Ready to Unlock)';
+    } else if (message === "Right Gripper Lock: Locked (Ready to Unlock)") {
+      document.getElementById('gripper-lock-right').innerHTML = 'Locked (Ready to Unlock)';
+    } else if (message === "Left Gripper Lock: Unlocked") {
+      document.getElementById('gripper-lock-left').innerHTML = 'Unlocked';
+    } else if (message === "Right Gripper Lock: Unlocked") {
+      document.getElementById('gripper-lock-right').innerHTML = 'Unlocked';
+    } else if (message.startsWith("Left Gripper Lock: Locked")) {
+      document.getElementById('gripper-lock-left').innerHTML = 'Locked';
+    } else if (message.startsWith("Right Gripper Lock: Locked")) {
+      document.getElementById('gripper-lock-right').innerHTML = 'Locked';
+    } else if (message === "Left Gripper Lock: Locked (Ready to Unlock)") {
+      document.getElementById('gripper-lock-left').innerHTML = 'Locked (Ready to Unlock)';
+    } else if (message === "Right Gripper Lock: Locked (Ready to Unlock)") {
+      document.getElementById('gripper-lock-right').innerHTML = 'Locked (Ready to Unlock)';
     }
   });
 
   toastr.options = {
     "progressBar": true,
-    "positionClass": "toast-bottom-left",
+    "positionClass": "toast-bottom-right",
     // "preventDuplicates": true,
   };
+
+  const MAX_TOASTS = 6;
+  toastr.subscribe(function(args) {
+      if (args.state === 'visible') {
+        var toasts = $("#toast-container > *:not([hidden])");
+        if (toasts && toasts.length > MAX_TOASTS)
+          toasts[toasts.length - 1].hidden = true;
+      }
+  });
 
   toastr.success("Click the start stream button, or press `t` to start stream.");
 })

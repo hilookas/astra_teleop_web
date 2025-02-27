@@ -77,18 +77,18 @@ class Teleopoperator:
         self.teleop_mode = teleop_mode
         assert self.teleop_mode in ["base", "arm", None]
         if self.teleop_mode == "base":
-            self.webserver.control_datachannel_log("Teleop Mode: Base Move")
-            logger.info("Teleop Mode: Base Move")
+            self.webserver.control_datachannel_log("Teleop Mode: Base")
+            logger.info("Teleop Mode: Base")
         elif self.teleop_mode == "arm":
             if self.percise_mode == "more_percise":
-                self.webserver.control_datachannel_log("Teleop Mode: More Percise Arm Move")
-                logger.info("Teleop Mode: More Percise Arm Move")
+                self.webserver.control_datachannel_log("Teleop Mode: Arm (More Percise)")
+                logger.info("Teleop Mode: Arm (More Percise)")
             elif self.percise_mode:
-                self.webserver.control_datachannel_log("Teleop Mode: Percise Arm Move")
-                logger.info("Teleop Mode: Percise Arm Move")
+                self.webserver.control_datachannel_log("Teleop Mode: Arm (Percise)")
+                logger.info("Teleop Mode: Arm (Percise)")
             else:
-                self.webserver.control_datachannel_log("Teleop Mode: Arm Move")
-                logger.info("Teleop Mode: Arm Move")
+                self.webserver.control_datachannel_log("Teleop Mode: Arm")
+                logger.info("Teleop Mode: Arm")
         else:
             self.webserver.control_datachannel_log("Teleop Mode: None")
             logger.info("Teleop Mode: None")
@@ -186,6 +186,7 @@ class Teleopoperator:
                     raise Exception(f"Reset {side} arm first!")
             
             for side in ["left", "right"]:
+            # for side in ["left"]:
                 Tsgoal = self.Tscam[side] @ self.Tcamgoal_last[side]
                 self.on_pub_goal(side, Tsgoal, Tscam=self.Tscam[side], Tsgoal_inactive=Tsgoal)
         
@@ -220,35 +221,32 @@ class Teleopoperator:
                 logger.info("lift_distance changed")
                 logger.info(str(self.lift_distance))
             
-            left_gripper_pos = (1 - values["left-gripper"]) * GRIPPER_MAX
-            right_gripper_pos = (1 - values["right-gripper"]) * GRIPPER_MAX
-            
+            gripper_pos = {}
+            for side in ["left", "right"]:
+                gripper_pos[side] = (1 - values[f"{side}-gripper"]) * GRIPPER_MAX
+                
             # Unlock gripper lock
-            if self.gripper_lock["left"] == True and left_gripper_pos > GRIPPER_MAX * 0.9:
-                self.gripper_lock["left"] = 'ready_to_unlock'
-                logger.info("Left gripper ready to unlock")
-                self.webserver.control_datachannel_log("Left gripper ready to unlock")
-            if self.gripper_lock["left"] == 'ready_to_unlock' and left_gripper_pos <= self.last_gripper_pos["left"]:
-                self.gripper_lock["left"] = False
-                logger.info("Left gripper unlocked")
-                self.webserver.control_datachannel_log("Left gripper unlocked")
-            if self.gripper_lock["right"] == True and right_gripper_pos > GRIPPER_MAX * 0.9:
-                self.gripper_lock["right"] = 'ready_to_unlock'
-                logger.info("Right gripper ready to unlock")
-                self.webserver.control_datachannel_log("Right gripper ready to unlock")
-            if self.gripper_lock["right"] == 'ready_to_unlock' and right_gripper_pos <= self.last_gripper_pos["right"]:
-                self.gripper_lock["right"] = False
-                logger.info("Right gripper unlocked")
-                self.webserver.control_datachannel_log("Right gripper unlocked")
+            for side in ["left", "right"]:
+                if self.gripper_lock[side] == True and gripper_pos[side] > GRIPPER_MAX * 0.9:
+                    self.gripper_lock[side] = 'ready_to_unlock'
+
+                    logger.info(f"{side.capitalize()} Gripper Lock: Locked (Ready to Unlock)")
+                    self.webserver.control_datachannel_log(f"{side.capitalize()} Gripper Lock: Locked (Ready to Unlock)")
+
+            for side in ["left", "right"]:
+                if self.gripper_lock[side] == 'ready_to_unlock' and gripper_pos[side] <= self.last_gripper_pos[side]:
+                    self.gripper_lock[side] = False
+                    logger.info(f"{side.capitalize()} Gripper Lock: Unlocked")
+                    self.webserver.control_datachannel_log(f"{side.capitalize()} Gripper Lock: Unlocked")
 
             # Update last gripper pos if not locked
-            if self.gripper_lock["left"] == False:
-                self.last_gripper_pos["left"] = left_gripper_pos
-            if self.gripper_lock["right"] == False:
-                self.last_gripper_pos["right"] = right_gripper_pos
+            for side in ["left", "right"]:
+                if self.gripper_lock[side] == False:
+                    self.last_gripper_pos[side] = gripper_pos[side]
             
-            self.on_pub_gripper("left", self.last_gripper_pos["left"])
-            self.on_pub_gripper("right", self.last_gripper_pos["right"])
+            for side in ["left", "right"]:
+            # for side in ["left"]:
+                self.on_pub_gripper(side, self.last_gripper_pos[side])
         elif self.teleop_mode == "base":
             values = dict(zip(pedal_names, cliped_pedal_real_values))
 
@@ -304,12 +302,12 @@ class Teleopoperator:
             self.update_teleop_mode("arm")
         elif control_type == "gripper_lock_left":
             self.gripper_lock["left"] = True
-            logger.info("Left gripper locked, release your pedal to unlock")
-            self.webserver.control_datachannel_log("Left gripper locked, release your pedal to unlock")
+            logger.info("Left Gripper Lock: Locked, release your pedal to unlock")
+            self.webserver.control_datachannel_log("Left Gripper Lock: Locked, release your pedal to unlock")
         elif control_type == "gripper_lock_right":
             self.gripper_lock["right"] = True
-            logger.info("Right gripper locked, release your pedal to unlock")
-            self.webserver.control_datachannel_log("Right gripper locked, release your pedal to unlock")
+            logger.info("Right Gripper Lock: Locked, release your pedal to unlock")
+            self.webserver.control_datachannel_log("Right Gripper Lock: Locked, release your pedal to unlock")
             
     def error_cb(self, msg):
         self.webserver.loop.call_soon_threadsafe(self.webserver.control_datachannel_log, msg)
