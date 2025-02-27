@@ -212,14 +212,14 @@ class Teleopoperator:
             LIFT_DISTANCE_MIN = 0
             LIFT_DISTANCE_MAX = 1.2
             if self.lift_distance + change < LIFT_DISTANCE_MIN or self.lift_distance + change > LIFT_DISTANCE_MAX:
-                self.webserver.control_datachannel_log("Lift over limit")
-                logger.warn("Lift over limit")
+                logger.warn("Lift Over Limit")
+                self.webserver.control_datachannel_log("Lift Over Limit")
             elif change:
                 self.Tscam["left"][2,3] += change
                 self.Tscam["right"][2,3] += change
                 self.lift_distance += change
-                logger.info("lift_distance changed")
-                logger.info(str(self.lift_distance))
+                logger.info(f"Lift Distance: {self.lift_distance:.3f}")
+                self.webserver.control_datachannel_log(f"Lift Distance: {self.lift_distance:.3f}")
             
             gripper_pos = {}
             for side in ["left", "right"]:
@@ -264,6 +264,11 @@ class Teleopoperator:
             self.update_teleop_mode(None)
             self.last_gripper_pos = { "left": GRIPPER_MAX, "right": GRIPPER_MAX }
             await self.reset_arm(INITIAL_LIFT_DISTANCE, math.pi/4, far_seeing=False)
+
+            # # uncomment when collecting datas to avoid stair in the dataset
+            # await self.update_percise_mode(percise_mode=True) 
+            # self.update_teleop_mode("arm")
+            
             self.on_reset()
             self.webserver.control_datachannel_log("Reset event")
             logger.info("Reset event")
