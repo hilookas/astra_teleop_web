@@ -247,6 +247,8 @@ class Teleopoperator:
             for side in ["left", "right"]:
             # for side in ["left"]:
                 self.on_pub_gripper(side, self.last_gripper_pos[side])
+                
+            self.on_cmd_vel(0.0, 0.0)
         elif self.teleop_mode == "base":
             values = dict(zip(pedal_names, cliped_pedal_real_values))
 

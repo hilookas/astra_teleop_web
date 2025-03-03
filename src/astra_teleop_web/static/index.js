@@ -7,6 +7,10 @@ const pedalCommTarget = new EventTarget();
 const controlCommTarget = new EventTarget();
 
 async function start() {
+  if (document.getElementById('start').classList.contains("hidden")) {
+    toastr.error("Disconnect first!");
+    return;
+  }
   document.getElementById('start').classList.add("hidden");
   toastr.info("Connecting...");
 
